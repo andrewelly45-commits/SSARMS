@@ -194,25 +194,6 @@ $pending_results = mysqli_fetch_assoc(mysqli_query($conn, "
         <p>Academic</p>
     </div>
 
-    <div class="card">
-        <h3>Pending Results</h3>
-
-        <?php if($pending_results['total_pending'] > 0){ ?>
-            <p style="color:red;">
-                <?= $pending_results['total_pending'] ?>
-            </p>
-
-            <a href="process_results.php" class="process-btn">
-                Process Results
-            </a>
-
-        <?php } else { ?>
-
-            <p style="color:green;">0</p>
-            <small>All results processed</small>
-
-        <?php } ?>
-    </div>
 
 </div>
 

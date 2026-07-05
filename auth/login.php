@@ -36,6 +36,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     // Create session
                     $_SESSION['user_id'] = $row['user_id'];
                     $_SESSION['role'] = $row['role'];
+                    $_SESSION['full_name'] = $row['full_name'];
+
+                    // ===== LOG THE LOGIN ACTION =====
+                    include 'audit_functions.php';
+                    
+                    logSystemAction(
+                        $row['user_id'],      // Use the fetched user ID
+                        $row['role'],          // Use the fetched role
+                        $row['full_name'],     // Use the fetched full name
+                        'login',
+                        "User logged in successfully",
+                        'auth',
+                        'users',
+                        $row['user_id']
+                    );
 
                     // Redirect based on role
                     if ($row['role'] == 'admin') {
@@ -49,6 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         exit();
                     } else {
                         header("Location: ../academic/academic_dashboard.php");
+                        exit();
                     }
                 }
 

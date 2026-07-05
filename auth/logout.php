@@ -6,6 +6,20 @@ $_SESSION = [];
 session_unset();
 session_destroy();
 
+// In logout.php
+include 'audit_functions.php';
+
+logSystemAction(
+    $_SESSION['user_id'],
+    $_SESSION['role'],
+    $_SESSION['full_name'],
+    'logout',
+    "User logged out",
+    'auth',
+    'users',
+    $_SESSION['user_id']
+);
+
 // delete session cookie
 if (ini_get("session.use_cookies")) {
     $params = session_get_cookie_params();

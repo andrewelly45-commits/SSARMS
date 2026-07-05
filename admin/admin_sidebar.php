@@ -542,10 +542,12 @@ document.addEventListener('DOMContentLoaded', function() {
         <a href="admin_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
         <a href="manage_students.php"><i class="fas fa-user-graduate"></i> Manage Students</a>
         <a href="manage_teachers.php"><i class="fas fa-chalkboard-user"></i> Manage Teachers</a>
+        <a href="view_teachers.php"><i class="fas fa-user"></i> View Teachers</a>
         <a href="manage_classes.php"><i class="fas fa-layer-group"></i> Manage Classes</a>
         <a href="manage_subjects.php"><i class="fas fa-book-open"></i> Manage Subjects</a>
         <a href="assign_class_subjects.php"><i class="fas fa-book"></i> Assign Class Subjects</a>
         <a href="manage_departments.php"><i class="fas fa-school"></i> Manage Departments</a>
+        <a href="system_history.php"><i class="fas fa-history"></i> System History</a>
     </div>
 
     <div class="bottom">

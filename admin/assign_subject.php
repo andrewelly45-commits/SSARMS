@@ -17,13 +17,34 @@ if (isset($_POST['assign'])) {
     $class_id = (int)$_POST['class_id'];
     $subject_id = (int)$_POST['subject_id'];
     
+    // Check if subject is already assigned to this teacher for this class
     $check = mysqli_query($conn, "SELECT * FROM teacher_subject WHERE teacher_id='$teacher_id' AND class_id='$class_id' AND subject_id='$subject_id'");
     
-    if (mysqli_num_rows($check) == 0) {
-        mysqli_query($conn, "INSERT INTO teacher_subject (teacher_id, subject_id, class_id) VALUES ('$teacher_id', '$subject_id', '$class_id')");
-        $_SESSION['msg'] = " Subject assigned successfully!";
+    if (mysqli_num_rows($check) > 0) {
+        $_SESSION['msg'] = "⚠️ Subject already assigned to this teacher for this class!";
+        $_SESSION['msg_type'] = 'warning';
     } else {
-        $_SESSION['msg'] = " Subject already assigned to this class!";
+        // Check if subject is assigned to another teacher for this class
+        $other_teacher_check = mysqli_query($conn, "
+            SELECT ts.*, u.full_name as teacher_name 
+            FROM teacher_subject ts
+            JOIN teacher t ON ts.teacher_id = t.teacher_id
+            JOIN users u ON t.user_id = u.user_id
+            WHERE ts.class_id='$class_id' 
+            AND ts.subject_id='$subject_id'
+            AND ts.teacher_id != '$teacher_id'
+        ");
+        
+        if (mysqli_num_rows($other_teacher_check) > 0) {
+            $other_teacher = mysqli_fetch_assoc($other_teacher_check);
+            $_SESSION['msg'] = "❌ This subject is already assigned to <strong>" . htmlspecialchars($other_teacher['teacher_name']) . "</strong> for this class!";
+            $_SESSION['msg_type'] = 'error';
+        } else {
+            // Insert the assignment
+            mysqli_query($conn, "INSERT INTO teacher_subject (teacher_id, subject_id, class_id) VALUES ('$teacher_id', '$subject_id', '$class_id')");
+            $_SESSION['msg'] = "✅ Subject assigned successfully!";
+            $_SESSION['msg_type'] = 'success';
+        }
     }
     header("Location: assign_subject.php?teacher_id=$teacher_id");
     exit();
@@ -34,11 +55,12 @@ if (isset($_GET['remove'])) {
     $remove_id = (int)$_GET['remove'];
     mysqli_query($conn, "DELETE FROM teacher_subject WHERE teacher_subject_id='$remove_id'");
     $_SESSION['msg'] = "🗑️ Subject removed successfully!";
+    $_SESSION['msg_type'] = 'success';
     header("Location: assign_subject.php?teacher_id=$teacher_id");
     exit();
 }
 
-// Get teacher info - REMOVED specialization column
+// Get teacher info
 $teacher_result = mysqli_query($conn, "
     SELECT u.full_name, u.email, u.status, t.phone_no, t.department_id, d.department_name
     FROM teacher t 
@@ -69,30 +91,49 @@ $assigned = mysqli_query($conn, "
 $selected_class = isset($_POST['class_id']) ? (int)$_POST['class_id'] : 0;
 $subjects = null;
 if ($selected_class > 0) {
-   $department_id = (int)$teacher['department_id'];
+    $department_id = (int)$teacher['department_id'];
 
-$subjects = mysqli_query($conn, "
-SELECT
-    s.subject_id,
-    s.subject_name
-FROM subject s
-JOIN class_subject cs
-    ON s.subject_id = cs.subject_id
-WHERE
-    cs.class_id = '$selected_class'
-    AND s.department_id = '$department_id'
-    AND s.subject_id NOT IN (
-        SELECT subject_id
-        FROM teacher_subject
-        WHERE teacher_id = '$teacher_id'
-        AND class_id = '$selected_class'
-    )
-ORDER BY s.subject_name
-");
+    $subjects = mysqli_query($conn, "
+        SELECT
+            s.subject_id,
+            s.subject_name,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 FROM teacher_subject ts2 
+                    WHERE ts2.subject_id = s.subject_id 
+                    AND ts2.class_id = '$selected_class'
+                    AND ts2.teacher_id != '$teacher_id'
+                ) THEN (
+                    SELECT u.full_name 
+                    FROM teacher_subject ts3
+                    JOIN teacher t ON ts3.teacher_id = t.teacher_id
+                    JOIN users u ON t.user_id = u.user_id
+                    WHERE ts3.subject_id = s.subject_id 
+                    AND ts3.class_id = '$selected_class'
+                    AND ts3.teacher_id != '$teacher_id'
+                    LIMIT 1
+                )
+                ELSE NULL
+            END as assigned_to_other
+        FROM subject s
+        JOIN class_subject cs ON s.subject_id = cs.subject_id
+        WHERE
+            cs.class_id = '$selected_class'
+            AND s.department_id = '$department_id'
+            AND s.subject_id NOT IN (
+                SELECT subject_id
+                FROM teacher_subject
+                WHERE teacher_id = '$teacher_id'
+                AND class_id = '$selected_class'
+            )
+        ORDER BY s.subject_name
+    ");
 }
 
 $msg = isset($_SESSION['msg']) ? $_SESSION['msg'] : '';
+$msg_type = isset($_SESSION['msg_type']) ? $_SESSION['msg_type'] : 'success';
 unset($_SESSION['msg']);
+unset($_SESSION['msg_type']);
 ?>
 
 <!DOCTYPE html>
@@ -258,6 +299,11 @@ unset($_SESSION['msg']);
             box-shadow: 0 0 0 3px rgba(7, 69, 145, 0.1);
         }
         
+        select option.assigned-other {
+            color: #dc2626;
+            background-color: #fee2e2;
+        }
+        
         button { 
             background: #074591; 
             color: white; 
@@ -287,6 +333,18 @@ unset($_SESSION['msg']);
             display: flex; 
             align-items: center; 
             gap: 10px; 
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .alert-success { 
@@ -301,6 +359,12 @@ unset($_SESSION['msg']);
             border-left: 4px solid #ef4444; 
         }
         
+        .alert-warning { 
+            background: #fef3c7; 
+            color: #92400e; 
+            border-left: 4px solid #f59e0b; 
+        }
+        
         .back-link {
             display: inline-flex;
             align-items: center;
@@ -313,6 +377,13 @@ unset($_SESSION['msg']);
         
         .back-link:hover {
             color: #074591;
+        }
+        
+        .assigned-info {
+            font-size: 12px;
+            color: #dc2626;
+            margin-top: 4px;
+            display: block;
         }
         
         @media (max-width: 768px) { 
@@ -353,8 +424,9 @@ unset($_SESSION['msg']);
         <div class="card-body">
             
             <?php if($msg): ?>
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i> <?= htmlspecialchars($msg) ?>
+                <div class="alert alert-<?= $msg_type ?>">
+                    <i class="fas <?= $msg_type == 'success' ? 'fa-check-circle' : ($msg_type == 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle') ?>"></i> 
+                    <?= htmlspecialchars_decode($msg) ?>
                 </div>
             <?php endif; ?>
             
@@ -447,12 +519,23 @@ unset($_SESSION['msg']);
                                 <option value="">-- Select Subject --</option>
                                 <?php if($subjects && mysqli_num_rows($subjects) > 0): ?>
                                     <?php while($s = mysqli_fetch_assoc($subjects)): ?>
-                                        <option value="<?= $s['subject_id'] ?>"><?= htmlspecialchars($s['subject_name']) ?></option>
+                                        <option value="<?= $s['subject_id'] ?>" <?= $s['assigned_to_other'] ? 'class="assigned-other"' : '' ?>>
+                                            <?= htmlspecialchars($s['subject_name']) ?>
+                                            <?php if($s['assigned_to_other']): ?>
+                                                (Assigned to: <?= htmlspecialchars($s['assigned_to_other']) ?>)
+                                            <?php endif; ?>
+                                        </option>
                                     <?php endwhile; ?>
                                 <?php else: ?>
                                     <option disabled><?= $selected_class ? 'All subjects already assigned to this class' : 'Select a class first' ?></option>
                                 <?php endif; ?>
                             </select>
+                            <?php if($subjects && mysqli_num_rows($subjects) > 0): ?>
+                                <small style="color:#64748b;display:block;margin-top:4px;">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Subjects marked in <span style="color:#dc2626;">red</span> are already assigned to another teacher
+                                </small>
+                            <?php endif; ?>
                         </div>
                         <div class="form-group">
                             <button type="submit" name="assign" <?= (!$selected_class || !$subjects || mysqli_num_rows($subjects) == 0) ? 'disabled' : '' ?>>
@@ -473,14 +556,15 @@ unset($_SESSION['msg']);
 </div>
 
 <script>
-// Auto-hide alerts after 4 seconds
+// Auto-hide alerts after 5 seconds
 setTimeout(() => {
     const alerts = document.querySelectorAll('.alert');
     alerts.forEach(alert => {
         setTimeout(() => {
             alert.style.opacity = '0';
+            alert.style.transition = 'opacity 0.3s ease';
             setTimeout(() => alert.remove(), 300);
-        }, 4000);
+        }, 5000);
     });
 }, 500);
 </script>

@@ -2,11 +2,26 @@
 session_start();
 include '../db.php';
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+// In your import_marks.php after successful import
+include '../auth/audit_functions.php';
+
+// After successful upload
+logSystemAction(
+    $_SESSION['user_id'],
+    $_SESSION['role'],
+    $_SESSION['full_name'],
+    'upload',
+    "Uploaded $success_count marks for class ID: $class_id, subject ID: $subject_id, term: $term, year: $academic_year",
+    'marks',
+    'marks',
+    $class_id,
+    null,
+    ['count' => $success_count, 'subject_id' => $subject_id, 'term' => $term]
+);
+
 
 /* ================= AUTH CHECK ================= */
-if (!isset($_SESSION['role']) || $_SESSION['role'] != 'teacher') {
+if (!isset($_SESSION['role']) || $_SESSION['role'] != 'academic') {
     header("Location: ../auth/login.php");
     exit();
 }
@@ -74,11 +89,32 @@ if (!in_array($file_ext, ['csv', 'xls', 'xlsx'])) {
     exit();
 }
 
-/* ================= READ CSV FILE ================= */
+/* ================= GET ALL STUDENTS IN CLASS ================= */
+$students_map = [];
+$students_regnos = [];
+$students_query = mysqli_query($conn,
+    "SELECT 
+        s.student_id,
+        s.registration_no,
+        u.full_name
+     FROM student s
+     INNER JOIN users u ON s.user_id = u.user_id
+     WHERE s.class_id='$class_id'"
+);
+
+while ($student = mysqli_fetch_assoc($students_query)) {
+    $students_map[$student['registration_no']] = [
+        'student_id' => $student['student_id'],
+        'name' => $student['full_name'],
+        'reg_no' => $student['registration_no']
+    ];
+    $students_regnos[] = $student['registration_no'];
+}
+
+/* ================= READ FILE DATA ================= */
 $data = [];
 $errors = [];
-$success_count = 0;
-$error_count = 0;
+$row_number = 2; // Start from row 2 (after headers)
 
 if ($file_ext == 'csv') {
     // Read CSV file
@@ -93,10 +129,11 @@ if ($file_ext == 'csv') {
         $headers = fgetcsv($handle, 0, ',', '"', '\\');
         
         // Read data rows - START FROM ROW 2
-        $row_number = 2;
         while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
-            // Clean the row data
-            $row = array_map('trim', $row);
+            // Clean the row data with null checking
+            $row = array_map(function($value) {
+                return $value !== null ? trim($value) : '';
+            }, $row);
             
             // Skip empty rows
             if (empty($row[0]) && empty($row[1]) && empty($row[2])) {
@@ -107,13 +144,13 @@ if ($file_ext == 'csv') {
             // Check if we have at least 3 columns
             if (count($row) >= 3) {
                 $data[] = [
-                    'reg_no' => $row[0], // Registration No (Column A)
-                    'name' => $row[1],   // Student Name (Column B)
-                    'marks' => $row[2]   // Marks (Column C)
+                    'row_number' => $row_number,
+                    'reg_no' => isset($row[0]) ? $row[0] : '',
+                    'name' => isset($row[1]) ? $row[1] : '',
+                    'marks' => isset($row[2]) ? $row[2] : ''
                 ];
             } else {
-                $errors[] = "Row $row_number: Invalid format - expected 3 columns";
-                $error_count++;
+                $errors[] = "Row $row_number: Invalid format - expected 3 columns (Registration No, Name, Marks)";
             }
             $row_number++;
         }
@@ -138,8 +175,10 @@ if ($file_ext == 'csv') {
         for ($i = 1; $i < count($rows); $i++) {
             $row = $rows[$i];
             
-            // Clean the row data
-            $row = array_map('trim', $row);
+            // Clean the row data with null checking
+            $row = array_map(function($value) {
+                return $value !== null ? trim($value) : '';
+            }, $row);
             
             // Skip empty rows
             if (empty($row[0]) && empty($row[1]) && empty($row[2])) {
@@ -149,9 +188,10 @@ if ($file_ext == 'csv') {
             // Check if we have at least 3 columns
             if (count($row) >= 3 && !empty($row[0])) {
                 $data[] = [
-                    'reg_no' => $row[0], // Registration No (Column A)
-                    'name' => $row[1],   // Student Name (Column B)
-                    'marks' => $row[2]   // Marks (Column C)
+                    'row_number' => $i + 1, // +1 because array starts at 0
+                    'reg_no' => isset($row[0]) ? $row[0] : '',
+                    'name' => isset($row[1]) ? $row[1] : '',
+                    'marks' => isset($row[2]) ? $row[2] : ''
                 ];
             }
         }
@@ -168,46 +208,29 @@ if (empty($data)) {
     exit();
 }
 
-/* ================= VALIDATE AND PROCESS MARKS ================= */
-// Get all students in this class
-$students_map = [];
-$students_query = mysqli_query($conn,
-    "SELECT 
-        s.student_id,
-        s.registration_no,
-        u.full_name
-     FROM student s
-     INNER JOIN users u ON s.user_id = u.user_id
-     WHERE s.class_id='$class_id'"
-);
+/* ================= VALIDATE ALL DATA FIRST ================= */
+$validation_passed = true;
+$processed_data = [];
 
-while ($student = mysqli_fetch_assoc($students_query)) {
-    $students_map[$student['registration_no']] = [
-        'student_id' => $student['student_id'],
-        'name' => $student['full_name']
-    ];
-}
-
-// Process each row
-foreach ($data as $row_index => $row_data) {
-    $reg_no = $row_data['reg_no'];
-    $marks = $row_data['marks'];
-    $row_number = $row_index + 2; // +2 because row 1 is headers and array starts at 0
+foreach ($data as $row_data) {
+    $row_num = $row_data['row_number'];
+    $reg_no = isset($row_data['reg_no']) ? trim($row_data['reg_no']) : '';
+    $student_name = isset($row_data['name']) ? trim($row_data['name']) : '';
+    $marks = isset($row_data['marks']) ? trim($row_data['marks']) : '';
     
-    // Skip if registration number is empty
+    // Check 1: Registration number is required
     if (empty($reg_no)) {
-        $errors[] = "Row $row_number: Missing registration number";
-        $error_count++;
+        $errors[] = "Row $row_num: Missing registration number. Please provide registration number.";
+        $validation_passed = false;
         continue;
     }
     
-    // Check if student exists in the class
+    // Check 2: Student must exist in the class
     if (!isset($students_map[$reg_no])) {
         // Try to find by name as fallback
         $found = false;
-        $student_name = $row_data['name'];
         foreach ($students_map as $reg => $student) {
-            if (strtolower(trim($student['name'])) == strtolower(trim($student_name))) {
+            if (strtolower(trim($student['name'])) == strtolower($student_name)) {
                 $reg_no = $reg;
                 $found = true;
                 break;
@@ -215,29 +238,59 @@ foreach ($data as $row_index => $row_data) {
         }
         
         if (!$found) {
-            $errors[] = "Row $row_number: Student with registration number '$reg_no' not found in this class";
-            $error_count++;
+            $errors[] = "Row $row_num: Student with registration number '$reg_no' (Name: '$student_name') not found in this class.";
+            $validation_passed = false;
             continue;
         }
     }
     
-    // Check if marks is empty
+    // Check 3: Marks is required
     if (empty($marks) && $marks !== '0') {
-        $errors[] = "Row $row_number: Missing marks for student '$reg_no'";
-        $error_count++;
+        $errors[] = "Row $row_num: Missing marks for student '$reg_no'. Please provide marks.";
+        $validation_passed = false;
         continue;
     }
     
-    // Validate marks (must be numeric between 0 and 100)
-    if (!is_numeric($marks) || $marks < 0 || $marks > 100) {
-        $errors[] = "Row $row_number: Invalid marks '$marks' for student '$reg_no'. Marks must be between 0 and 100.";
-        $error_count++;
+    // Check 4: Marks must be numeric
+    if (!is_numeric($marks)) {
+        $errors[] = "Row $row_num: Invalid marks format '$marks' for student '$reg_no'. Marks must be numeric.";
+        $validation_passed = false;
         continue;
     }
     
-    // Valid data - process it
-    $student_id = $students_map[$reg_no]['student_id'];
-    $marks = (float)$marks;
+    // Check 5: Marks must be between 0 and 100 (NOT greater than 100)
+    if ($marks < 0 || $marks > 100) {
+        $errors[] = "Row $row_num: Invalid marks value '$marks' for student '$reg_no'. Marks must be between 0 and 100.";
+        $validation_passed = false;
+        continue;
+    }
+    
+    // If all validations pass, add to processed data
+    $processed_data[] = [
+        'student_id' => $students_map[$reg_no]['student_id'],
+        'reg_no' => $reg_no,
+        'marks' => (float)$marks
+    ];
+}
+
+/* ================= IF ANY ERROR, DON'T PROCESS ANYTHING ================= */
+if (!$validation_passed || !empty($errors)) {
+    // Store errors in session
+    $_SESSION['error_msg'] = "File validation failed. Please fix the following errors:<br>" . implode('<br>', $errors);
+    $_SESSION['error_details'] = $errors;
+    $_SESSION['import_success'] = false;
+    
+    // Redirect back without processing anything
+    header("Location: enter_marks.php?class_id=" . $class_id);
+    exit();
+}
+
+/* ================= ALL VALIDATIONS PASSED - PROCESS MARKS ================= */
+$success_count = 0;
+
+foreach ($processed_data as $row_data) {
+    $student_id = $row_data['student_id'];
+    $marks = $row_data['marks'];
     
     // Check if mark exists
     $check = mysqli_query($conn,
@@ -275,18 +328,8 @@ foreach ($data as $row_index => $row_data) {
 }
 
 /* ================= SESSION MESSAGES ================= */
-if ($success_count > 0 && $error_count == 0) {
-    $_SESSION['success_msg'] = "Successfully imported $success_count marks for $term, $academic_year!";
-} elseif ($success_count > 0 && $error_count > 0) {
-    $_SESSION['success_msg'] = "Successfully imported $success_count marks.";
-    $_SESSION['warning_msg'] = "$error_count rows had errors. Please check the error details below.";
-    $_SESSION['error_details'] = $errors;
-} elseif ($success_count == 0 && $error_count > 0) {
-    $_SESSION['error_msg'] = "No marks were imported. $error_count errors found.";
-    $_SESSION['error_details'] = $errors;
-} else {
-    $_SESSION['error_msg'] = "No marks were imported. Please check the file format.";
-}
+$_SESSION['success_msg'] = "Successfully imported $success_count marks for $term, $academic_year!";
+$_SESSION['import_success'] = true;
 
 // Redirect back
 header("Location: enter_marks.php?class_id=" . $class_id);
