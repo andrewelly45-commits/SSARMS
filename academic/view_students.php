@@ -187,7 +187,10 @@ tr:hover td {
 
 <body>
 
-<?php include 'teacher_sidebar.php'; ?>
+
+<?php include 'academic_sidebar.php'; ?>
+
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
 

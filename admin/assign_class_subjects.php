@@ -484,7 +484,7 @@ if ($class_id > 0) {
 <body>
 
 <?php include 'admin_sidebar.php'; ?>
-<?php include 'admin_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
     

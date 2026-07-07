@@ -152,41 +152,39 @@ body {
     font-size: 24px;
 }
 
-/* PROFILE SECTION */
-.profile {
+/* ========== SIDEBAR BRAND (Logo) ========== */
+.sidebar-brand {
     text-align: center;
-    padding: 20px 15px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 25px 15px;
     margin-bottom: 20px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255,255,255,.03);
 }
 
-.profile img {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
+.school-logo {
+    width: 90px;
+    height: 90px;
     object-fit: cover;
-    margin-bottom: 12px;
+    border-radius: 50%;
+    margin-bottom: 15px;
     border: 3px solid #f59e0b;
     padding: 3px;
     background: white;
 }
 
-.profile h4 {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0 0 5px 0;
-    color: white;
+.sidebar-brand h3 {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
 }
 
-.profile p {
-    font-size: 12px;
+.sidebar-brand p {
     color: #94a3b8;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
+    font-size: 12px;
+    line-height: 1.5;
 }
+
 
 /* MENU LINKS */
 .menu {
@@ -223,60 +221,6 @@ body {
     color: white;
 }
 
-/* TOPBAR */
-.topbar {
-    position: fixed;
-    top: 0;
-    left: 270px;
-    right: 0;
-    height: 60px;
-    background: #ffffff;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    z-index: 999;
-}
-
-/* left title */
-.topbar-left h3 {
-    font-size: 18px;
-    color: #1a1a2e;
-    font-weight: 600;
-}
-
-/* right side */
-.topbar-right {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.topbar-right i {
-    font-size: 18px;
-    color: #1a1a2e;
-    cursor: pointer;
-}
-
-/* username box */
-.user-info {
-    background: #f59e0b;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 500;
-}
-
-/* RESPONSIVE */
-@media (max-width: 768px) {
-    .topbar {
-        left: 0;
-    }
-}
-
-
 .menu a.active {
     background: linear-gradient(180deg,#1a1a2e 0%,#0f0f23 100%);
     color: white;
@@ -285,52 +229,6 @@ body {
 
 .menu a.active i {
     color: white;
-}
-
-/* BOTTOM SECTION */
-.bottom {
-    margin-top: 30px;
-    padding: 15px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-}
-
-.bottom a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    margin-bottom: 8px;
-    color: #cbd5e1;
-    text-decoration: none;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-}
-
-.bottom a i {
-    width: 22px;
-}
-
-/* Bottom hover - ORANGE color */
-.bottom a:hover {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    transform: translateX(5px);
-}
-
-.bottom a:hover i {
-    color: #f59e0b;
-}
-
-/* LOGOUT BUTTON - Red with orange hover */
-.logout {
-    color: #f87171 !important;
-}
-
-.logout:hover {
-    background: rgba(245, 158, 11, 0.15) !important;
-    color: #fbbf24 !important;
 }
 
 /* TOGGLE BUTTON FOR MOBILE */
@@ -451,29 +349,14 @@ document.addEventListener('DOMContentLoaded', function() {
     <i class="fas fa-bars"></i>
 </button>
 
-<!-- TOPBAR -->
-
-<div class="topbar">
-    <div class="topbar-left">
-        <h3>Teacher Portal</h3>
-    </div>
-</div>
-
 <!-- SIDEBAR -->
 <div class="sidebar">
 
-   <div class="profile">
-    <img src="<?= htmlspecialchars($profile_pic); ?>" alt="Teacher" id="teacherProfileImage">
+    <!-- SCHOOL LOGO -->
+    <div class="sidebar-brand">
+        <img src="../images/tyler.jpg" alt="School Logo" class="school-logo">
+    </div>
 
-    <h4>
-        <?= htmlspecialchars($_SESSION['full_name'] ?? $teacher['full_name'] ?? 'Teacher') ?>
-    </h4>
-
-    <p>
-        <i class="fas fa-chalkboard-user"></i>
-        Teacher
-    </p>
-</div>
 
     <!-- MENU -->
     <div class="menu">
@@ -501,18 +384,6 @@ document.addEventListener('DOMContentLoaded', function() {
             <i class="fas fa-chart-line"></i>
             View Marks
         </a>
-    </div>
-
-    <div class="bottom">
-
-       <a href="../view_profile.php">
-          <i class="fas fa-user-cog"></i>
-          View Profile
-       </a>
-
-       <a href="../auth/logout.php" class="logout">
-           <i class="fas fa-sign-out-alt"></i> Logout
-       </a>
     </div>
 
 </div>

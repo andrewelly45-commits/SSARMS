@@ -663,7 +663,7 @@ tr:hover td {
 
 <div class="main-wrapper">
     <?php include 'admin_sidebar.php'; ?>
-    <?php include 'admin_topbar.php'; ?>
+   <?php include '../auth/topbar.php'; ?>
 
     <div class="content-wrapper">
         <div class="container">

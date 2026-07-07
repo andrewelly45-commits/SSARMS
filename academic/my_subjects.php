@@ -169,7 +169,7 @@ $subjects_query = mysqli_query($conn, "
 
 
 <?php include 'academic_sidebar.php'; ?>
-<?php include 'academic_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 
 <div class="container">

@@ -18,7 +18,7 @@ $teachers_query = mysqli_query($conn, "
         u.full_name,
         u.email,
         t.phone_no,
-        t.status,
+        u.status,
         d.department_name,
         d.department_id
     FROM teacher t
@@ -106,7 +106,7 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 15px;
         }
@@ -173,6 +173,12 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
             border-radius: 16px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         .stat-card .number {
@@ -190,6 +196,45 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
         .stat-card .icon {
             font-size: 24px;
             margin-bottom: 8px;
+        }
+
+        /* Filter Buttons */
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            padding: 8px 18px;
+            border: 2px solid #e2e8f0;
+            border-radius: 30px;
+            background: white;
+            color: #64748b;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-btn:hover {
+            border-color: #074591;
+            color: #074591;
+            transform: translateY(-2px);
+        }
+
+        .filter-btn.active {
+            background: #074591;
+            border-color: #074591;
+            color: white;
+        }
+
+        .filter-btn.active i {
+            color: white !important;
         }
 
         /* Teacher Cards */
@@ -272,6 +317,9 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
             border-radius: 30px;
             font-size: 13px;
             font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .status-active {
@@ -279,9 +327,9 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
             color: #166534;
         }
 
-        .status-inactive {
-            background: #fee2e2;
-            color: #991b1b;
+        .status-suspended {
+            background: #fef3c7;
+            color: #92400e;
         }
 
         .teacher-body {
@@ -433,10 +481,14 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
             .subject-list {
                 padding-left: 10px;
             }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
         @media print {
-            .search-box {
+            .search-box, .filter-buttons {
                 display: none;
             }
             .teacher-card {
@@ -449,7 +501,7 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
 <body>
 
 <?php include 'admin_sidebar.php'; ?>
-<?php include 'admin_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="main">
     <div class="page-header">
@@ -471,11 +523,19 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
     $total_classes = 0;
     $total_subjects = 0;
     $active_teachers = 0;
-    
+    $suspended_teachers = 0;
+
     foreach ($teacher_assignments as $teacher) {
-        if ($teacher['status'] == 'active') {
+        $status = strtolower($teacher['status'] ?? 'active');
+        
+        if ($status == 'active') {
             $active_teachers++;
+        } elseif ($status == 'suspended') {
+            $suspended_teachers++;
+        } else {
+            $active_teachers++; // default to active if status is null or something else
         }
+        
         $total_classes += count($teacher['classes']);
         foreach ($teacher['classes'] as $class) {
             $total_subjects += $class['subject_count'];
@@ -494,16 +554,29 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
             <div class="number"><?= $active_teachers ?></div>
             <div class="label">Active Teachers</div>
         </div>
+        <div class="stat-card" style="border-left: 3px solid #f59e0b;">
+            <div class="icon"><i class="fas fa-user-slash" style="color:#f59e0b;"></i></div>
+            <div class="number"><?= $suspended_teachers ?></div>
+            <div class="label">Suspended Teachers</div>
+        </div>
         <div class="stat-card">
             <div class="icon"><i class="fas fa-school" style="color:#d97706;"></i></div>
             <div class="number"><?= $total_classes ?></div>
             <div class="label">Total Class Assignments</div>
         </div>
-        <div class="stat-card">
-            <div class="icon"><i class="fas fa-book" style="color:#7c3aed;"></i></div>
-            <div class="number"><?= $total_subjects ?></div>
-            <div class="label">Total Subject Assignments</div>
-        </div>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="all" onclick="filterByStatus('all')">
+            <i class="fas fa-users"></i> All Teachers
+        </button>
+        <button class="filter-btn" data-filter="active" onclick="filterByStatus('active')">
+            <i class="fas fa-check-circle" style="color:#16a34a;"></i> Active
+        </button>
+        <button class="filter-btn" data-filter="suspended" onclick="filterByStatus('suspended')">
+            <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Suspended
+        </button>
     </div>
 
     <!-- Teacher Cards -->
@@ -533,12 +606,27 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
                                         <i class="fas fa-building"></i>
                                         <?= htmlspecialchars($teacher['department_name'] ?? 'No Department') ?>
                                     </span>
+                                    <span>
+                                        <i class="fas fa-id-badge"></i>
+                                        ID: <?= htmlspecialchars($teacher['teacher_id']) ?>
+                                    </span>
                                 </div>
                             </div>
                         </div>
-                        <span class="teacher-status <?= $teacher['status'] == 'active' ? 'status-active' : 'status-inactive' ?>">
-                            <i class="fas fa-circle"></i>
-                            <?= ucfirst($teacher['status']) ?>
+                        <?php
+                        // Determine status class and icon based on users table (only active or suspended)
+                        $status_class = 'status-active';
+                        $status_icon = 'fa-check-circle';
+                        $status_text = ucfirst($teacher['status'] ?? 'Active');
+                        
+                        if (strtolower($teacher['status'] ?? 'active') == 'suspended') {
+                            $status_class = 'status-suspended';
+                            $status_icon = 'fa-exclamation-triangle';
+                        }
+                        ?>
+                        <span class="teacher-status <?= $status_class ?>">
+                            <i class="fas <?= $status_icon ?>"></i>
+                            <?= $status_text ?>
                         </span>
                     </div>
 
@@ -591,21 +679,49 @@ while ($teacher = mysqli_fetch_assoc($teachers_query)) {
 </div>
 
 <script>
-function filterTeachers() {
+let currentFilter = 'all';
+
+function filterByStatus(status) {
+    currentFilter = status;
+    
+    // Update active button
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === status) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Apply filters
+    applyFilters();
+}
+
+function applyFilters() {
     const input = document.getElementById('searchInput');
-    const filter = input.value.toLowerCase();
+    const searchTerm = input.value.toLowerCase();
     const cards = document.getElementsByClassName('teacher-card');
     
     for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
         const text = card.textContent.toLowerCase();
+        const statusElement = card.querySelector('.teacher-status');
+        const statusText = statusElement ? statusElement.textContent.trim().toLowerCase() : '';
         
-        if (text.includes(filter)) {
-            card.style.display = '';
-        } else {
-            card.style.display = 'none';
+        // Check if matches search
+        const matchesSearch = text.includes(searchTerm);
+        
+        // Check if matches status filter
+        let matchesStatus = true;
+        if (currentFilter !== 'all') {
+            matchesStatus = statusText.includes(currentFilter);
         }
+        
+        card.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
     }
+}
+
+function filterTeachers() {
+    applyFilters();
 }
 
 // Real-time search with debounce
@@ -613,6 +729,11 @@ let searchTimeout;
 document.getElementById('searchInput').addEventListener('input', function() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(filterTeachers, 300);
+});
+
+// Initialize - show all
+document.addEventListener('DOMContentLoaded', function() {
+    applyFilters();
 });
 </script>
 

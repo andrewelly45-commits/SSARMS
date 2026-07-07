@@ -36,6 +36,7 @@ $current_date = date('l, F j, Y');
 include 'student_sidebar.php';
 ?>
 
+<?php include '../auth/topbar.php'; ?>
 <!-- MAIN CONTENT (only the content that changes) -->
 <div class="main-content">
 

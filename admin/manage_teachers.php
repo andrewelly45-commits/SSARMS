@@ -276,7 +276,7 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
 </button>
 
 <?php include 'admin_sidebar.php'; ?>
-<?php include 'admin_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
     <h2><i class="fas fa-chalkboard-user" style="color: #074591;"></i> Manage Teachers</h2>

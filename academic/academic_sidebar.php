@@ -58,6 +58,15 @@ if ($profile_pic == '../assets/user.png' && isset($_SESSION['user_id'])) {
         }
     }
 }
+
+// Set default logo path
+$logo_path = '../images/tyler.jpg';
+if (!file_exists($logo_path)) {
+    $logo_path = '../uploads/logo.png';
+}
+if (!file_exists($logo_path)) {
+    $logo_path = '../assets/logo.png';
+}
 ?>
 
 <!-- Font Awesome -->
@@ -100,45 +109,48 @@ if ($profile_pic == '../assets/user.png' && isset($_SESSION['user_id'])) {
     border-radius:5px;
 }
 
-/* ================= PROFILE ================= */
-.profile {
+/* ================= SIDEBAR BRAND (LOGO) ================= */
+.sidebar-brand {
     text-align: center;
-    padding: 20px 15px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 25px 15px;
     margin-bottom: 20px;
     background: rgba(255,255,255,0.03);
 }
 
-.profile img {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
+.school-logo {
+    width: 100px;
+    height: 100px;
     object-fit: cover;
-    object-position: center;
-    display: block;
-    margin: 0 auto 12px auto;
+    border-radius: 50%;
+    margin-bottom: 15px;
     border: 3px solid #f59e0b;
+    padding: 4px;
     background: white;
+    transition: transform 0.3s ease;
 }
 
-.profile h4{
-    color:white;
-    font-size:16px;
-    margin-bottom:5px;
+.school-logo:hover {
+    transform: scale(1.05);
 }
 
-.profile p{
-    color:#94a3b8;
-    font-size:12px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:5px;
+.sidebar-brand h3 {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    letter-spacing: 1px;
 }
 
-.profile p i{
-    color:#f59e0b;
+.sidebar-brand h3 span {
+    color: #f59e0b;
 }
+
+.sidebar-brand p {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 
 /* ================= MENU ================= */
 .menu{
@@ -174,41 +186,6 @@ if ($profile_pic == '../assets/user.png' && isset($_SESSION['user_id'])) {
     background:linear-gradient(180deg,#1a1a2e 0%,#0f0f23 100%);
     color:white;
     box-shadow:0 4px 10px rgba(245,158,11,.3);
-}
-
-/* ================= BOTTOM ================= */
-.bottom{
-    margin-top:30px;
-    padding:15px;
-    border-top:1px solid rgba(255,255,255,.1);
-}
-
-.bottom a{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:12px 15px;
-    margin-bottom:8px;
-    color:#cbd5e1;
-    text-decoration:none;
-    border-radius:12px;
-    font-size:14px;
-    transition:.3s;
-}
-
-.bottom a:hover{
-    background:rgba(245,158,11,.15);
-    color:#fbbf24;
-    transform:translateX(5px);
-}
-
-.logout{
-    color:#f87171 !important;
-}
-
-.logout:hover{
-    background:rgba(248,113,113,.15) !important;
-    color:#f87171 !important;
 }
 
 /* ================= TOGGLE BUTTON ================= */
@@ -270,19 +247,13 @@ if ($profile_pic == '../assets/user.png' && isset($_SESSION['user_id'])) {
 <!-- Sidebar -->
 <div class="sidebar">
 
-    <!-- Profile -->
-    <div class="profile">
-        <img src="<?= htmlspecialchars($profile_pic); ?>" alt="Academic Officer" id="sidebarProfileImage">
-
-        <h4>
-            <?= htmlspecialchars($_SESSION['full_name'] ?? 'Academic Teacher'); ?>
-        </h4>
-
-        <p>
-            <i class="fas fa-user-tie"></i>
-            Academic teacher
-        </p>
+    <!-- SCHOOL LOGO - Profile Removed -->
+    <div class="sidebar-brand">
+        <img src="<?= htmlspecialchars($logo_path); ?>" alt="School Logo" class="school-logo">
+       
     </div>
+
+    
 
     <!-- Menu -->
     <div class="menu">
@@ -320,21 +291,6 @@ if ($profile_pic == '../assets/user.png' && isset($_SESSION['user_id'])) {
         <a href="approve_result.php">
             <i class="fas fa-check-circle"></i>
             Approve Results
-        </a>
-
-    </div>
-
-    <!-- Bottom -->
-    <div class="bottom">
-
-        <a href="../view_profile.php">
-            <i class="fas fa-user-cog"></i>
-            View Profile
-        </a>
-
-        <a href="../auth/logout.php" class="logout">
-            <i class="fas fa-sign-out-alt"></i>
-            Logout
         </a>
 
     </div>
@@ -379,25 +335,12 @@ document.addEventListener('DOMContentLoaded', function(){
         }
     });
 
-    // Function to update sidebar profile image
-    window.updateAcademicSidebarProfile = function(imageUrl) {
-        const profileImg = document.getElementById('sidebarProfileImage');
-        if (profileImg) {
-            profileImg.src = imageUrl + '?t=' + new Date().getTime();
-            // Add a small animation
-            profileImg.style.transform = 'scale(0.9)';
-            setTimeout(() => {
-                profileImg.style.transform = 'scale(1)';
-            }, 200);
-        }
-    };
-
-    // Handle image loading errors
-    const profileImg = document.getElementById('sidebarProfileImage');
-    if (profileImg) {
-        profileImg.onerror = function() {
-            // If image fails to load, use default
-            this.src = '../assets/user.png';
+    // Handle logo loading errors
+    const logoImg = document.querySelector('.school-logo');
+    if (logoImg) {
+        logoImg.onerror = function() {
+            // If logo fails to load, use default
+            this.src = '../assets/logo.png';
         };
     }
 });

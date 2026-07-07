@@ -255,6 +255,8 @@ body {
 
 <?php include 'teacher_sidebar.php'; ?>
 
+<?php include '../auth/topbar.php'; ?>
+
 <!-- MAIN CONTENT -->
 <div class="main">
 

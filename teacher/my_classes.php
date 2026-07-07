@@ -202,6 +202,8 @@ $class_query = mysqli_query($conn, "
 
 <?php include 'teacher_sidebar.php'; ?>
 
+<?php include '../auth/topbar.php'; ?>
+
 <div class="container">
     <div class="card">
         <h2>

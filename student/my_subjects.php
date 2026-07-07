@@ -134,6 +134,8 @@ $subjects = mysqli_query($conn, "
 
 <?php include 'student_sidebar.php'; ?>
 
+<?php include '../auth/topbar.php'; ?>
+
 <div class="main-content">
 
     <div class="card">

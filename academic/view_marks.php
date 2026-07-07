@@ -323,6 +323,7 @@ tr:hover{
 <body>
 
 <?php include 'academic_sidebar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
 

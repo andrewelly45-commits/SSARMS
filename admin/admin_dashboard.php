@@ -301,7 +301,7 @@ if ($class_query) {
 <body>
 
 <?php include 'admin_sidebar.php'; ?>
-<?php include 'admin_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('active')">☰</button>
 

@@ -710,7 +710,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
     </button>
 
     <?php include 'admin_sidebar.php'; ?>
-    <?php include 'admin_topbar.php'; ?>
+    <?php include '../auth/topbar.php'; ?>
 
     <div class="container">
         <!-- Header -->

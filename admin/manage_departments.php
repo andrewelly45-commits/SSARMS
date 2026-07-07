@@ -359,7 +359,7 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
 
 <div class="main-wrapper">
     <?php include 'admin_sidebar.php'; ?>
-    <?php include 'admin_topbar.php'; ?>
+    <?php include '../auth/topbar.php'; ?>
 
     <div class="main-content">
         <div class="container">

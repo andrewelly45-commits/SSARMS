@@ -604,7 +604,7 @@ if (isset($_GET['clean']) && $_GET['clean'] == 'old') {
 <body>
 
 <?php include 'admin_sidebar.php'; ?>
-<?php include 'admin_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="main">
     <div class="page-header">
@@ -1077,6 +1077,9 @@ setTimeout(() => {
     });
 }, 500);
 </script>
+
+
+<?php include '../footer.php'; ?>
 
 </body>
 </html>

@@ -326,7 +326,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
 <body>
 
 <?php include 'academic_sidebar.php'; ?>
-<?php include 'academic_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
     <h2><i class="fas fa-file-excel"></i> Enter Marks via Excel</h2>

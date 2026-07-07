@@ -62,6 +62,15 @@ if ($profile_pic == '../assets/user.png' && isset($_SESSION['user_id'])) {
         }
     }
 }
+
+// Set default logo path
+$logo_path = '../images/tyler.jpg';
+if (!file_exists($logo_path)) {
+    $logo_path = '../uploads/logo.png';
+}
+if (!file_exists($logo_path)) {
+    $logo_path = '../assets/logo.png';
+}
 ?>
 
 <!DOCTYPE html>
@@ -116,62 +125,48 @@ body {
     border-radius: 5px;
 }
 
-/* TITLE */
-.sidebar h2 {
+/* ================= SIDEBAR BRAND (LOGO) ================= */
+.sidebar-brand {
     text-align: center;
-    margin: 20px 0 25px 0;
-    font-size: 20px;
-    font-weight: 600;
-    padding-bottom: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-
-.sidebar h2 i {
-    color: #f59e0b;
-    font-size: 24px;
-}
-
-/* PROFILE SECTION */
-.profile {
-    text-align: center;
-    padding: 20px 15px;
+    padding: 25px 15px;
     margin-bottom: 20px;
     background: rgba(255,255,255,0.03);
 }
 
-.profile img {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;  /* This makes it round */
+.school-logo {
+    width: 100px;
+    height: 100px;
     object-fit: cover;
-    margin-bottom: 12px;
+    border-radius: 50%;
+    margin-bottom: 15px;
     border: 3px solid #f59e0b;
-    padding: 3px;
+    padding: 4px;
     background: white;
+    transition: transform 0.3s ease;
 }
 
-.profile h4 {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0 0 5px 0;
-    color: white;
+.school-logo:hover {
+    transform: scale(1.05);
 }
 
-.profile p {
-    font-size: 12px;
-    color: #94a3b8;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
+.sidebar-brand h3 {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    letter-spacing: 1px;
 }
 
-.profile p i {
+.sidebar-brand h3 span {
     color: #f59e0b;
 }
+
+.sidebar-brand p {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 
 /* MENU LINKS */
 .menu {
@@ -220,50 +215,6 @@ body {
     color: white;
 }
 
-/* BOTTOM SECTION */
-.bottom {
-    margin-top: 30px;
-    padding: 15px;
-   
-}
-
-.bottom a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    margin-bottom: 8px;
-    color: #cbd5e1;
-    text-decoration: none;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-}
-
-.bottom a i {
-    width: 22px;
-}
-
-.bottom a:hover {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    transform: translateX(5px);
-}
-
-.bottom a:hover i {
-    color: #f59e0b;
-}
-
-/* LOGOUT BUTTON */
-.logout {
-    color: #f87171 !important;
-}
-
-.logout:hover {
-    background: rgba(245, 158, 11, 0.15) !important;
-    color: #fbbf24 !important;
-}
 
 /* TOGGLE BUTTON */
 .toggle-btn {
@@ -496,22 +447,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Handle image loading errors
-    const profileImg = document.querySelector('.profile img');
-    if (profileImg) {
-        profileImg.onerror = function() {
-            // If image fails to load, use default
-            this.src = '../assets/user.png';
+    // Handle logo loading errors
+    const logoImg = document.querySelector('.school-logo');
+    if (logoImg) {
+        logoImg.onerror = function() {
+            // If logo fails to load, use default
+            this.src = '../assets/logo.png';
         };
     }
-
-    // Function to update sidebar profile image
-    window.updateAdminSidebarProfile = function(imageUrl) {
-        const profileImg = document.querySelector('.profile img');
-        if (profileImg) {
-            profileImg.src = imageUrl + '?t=' + new Date().getTime();
-        }
-    };
 });
 </script>
 </head>
@@ -523,20 +466,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <div class="sidebar">
 
-    <div class="profile">
-        <img src="<?= htmlspecialchars($profile_pic); ?>"
-        alt="Profile"
-        id="adminProfileImage">
-        
-        <h4>
-            <?= htmlspecialchars($_SESSION['full_name'] ?? 'Administrator'); ?>
-        </h4>
-
-        <p>
-            <i class="fas fa-user-cog"></i>
-            Administrator
-        </p>
+    <!-- SCHOOL LOGO - Profile Removed -->
+    <div class="sidebar-brand">
+        <img src="<?= htmlspecialchars($logo_path); ?>" alt="School Logo" class="school-logo">
     </div>
+
 
     <div class="menu">
         <a href="admin_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
@@ -550,10 +484,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <a href="system_history.php"><i class="fas fa-history"></i> System History</a>
     </div>
 
-    <div class="bottom">
-        <a href="../view_profile.php"><i class="fas fa-user-cog"></i> View Profile</a>
-        <a href="../auth/logout.php" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
-    </div>
 </div>
 
 </body>

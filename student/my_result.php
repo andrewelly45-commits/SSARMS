@@ -422,6 +422,8 @@ if ($selected_term == 'Term 1') {
 
 <?php include 'student_sidebar.php'; ?>
 
+<?php include '../auth/topbar.php'; ?>
+
 <div class="main-content">
 
     <div class="page-header">
