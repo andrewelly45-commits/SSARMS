@@ -103,8 +103,8 @@ $class_query = mysqli_query($conn, "
         }
         
         th {
-            background: orange;
-            color: black;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);
+            color: white;
             padding: 14px 16px;
             text-align: left;
             font-size: 14px;
@@ -121,7 +121,6 @@ $class_query = mysqli_query($conn, "
         }
         
         .sn-badge {
-            background: orange;
             color: black;
             width: 32px;
             height: 32px;
@@ -149,8 +148,8 @@ $class_query = mysqli_query($conn, "
         }
         
         .btn {
-            background: orange;
-            color: black;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);
+            color: white;
             padding: 8px 16px;
             border-radius: 8px;
             text-decoration: none;
@@ -162,7 +161,7 @@ $class_query = mysqli_query($conn, "
         }
         
         .btn:hover {
-            background: orange;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);
             transform: translateY(-2px);
         }
         
@@ -201,6 +200,7 @@ $class_query = mysqli_query($conn, "
 <body>
 
 <?php include 'academic_sidebar.php'; ?>
+
 <?php include '../auth/topbar.php'; ?>
 
 <div class="container">
@@ -265,4 +265,5 @@ $class_query = mysqli_query($conn, "
 </div>
 <?php include '../footer.php'; ?>
 </body>
+
 </html>

@@ -2,21 +2,11 @@
 session_start();
 include '../db.php';
 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // In your view_marks.php delete function
 include '../auth/audit_functions.php';
-
-logSystemAction(
-    $_SESSION['user_id'],
-    $_SESSION['role'],
-    $_SESSION['full_name'],
-    'delete',
-    "Deleted mark ID: $mark_id for student: $student_name, subject: $subject_name",
-    'marks',
-    'marks',
-    $mark_id,
-    ['marks' => $row['marks'], 'student' => $row['full_name']],
-    null
-);
 
 /* ================= AUTH CHECK ================= */
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'teacher') {
@@ -41,9 +31,10 @@ if (!$teacher) {
 
 $teacher_id = $teacher['teacher_id'];
 
-/* ================= DELETE ALL MARKS FOR CLASS ================= */
-if (isset($_GET['delete_class_marks'])) {
+/* ================= DELETE MARKS FOR SPECIFIC TERM ================= */
+if (isset($_GET['delete_term_marks'])) {
     $class_id = mysqli_real_escape_string($conn, $_GET['class_id']);
+    $term = mysqli_real_escape_string($conn, $_GET['term']);
     
     // Check if the class belongs to this teacher
     $check_class_query = mysqli_query($conn,
@@ -53,29 +44,50 @@ if (isset($_GET['delete_class_marks'])) {
     );
     
     if (mysqli_num_rows($check_class_query) > 0) {
-        // Check if there are any published marks in this class
+        // Check if there are any published marks in this class for this term
         $check_published = mysqli_query($conn,
             "SELECT COUNT(*) as published_count 
              FROM marks 
              WHERE class_id = '$class_id' 
              AND teacher_id = '$teacher_id' 
+             AND term = '$term'
              AND status = 'published'"
         );
         
         $published_data = mysqli_fetch_assoc($check_published);
         
         if ($published_data['published_count'] > 0) {
-            $_SESSION['error_message'] = "Cannot delete class results because some marks are already published!";
+            $_SESSION['error_message'] = "Cannot delete $term results because some marks are already published!";
         } else {
-            // Delete all pending marks for this class
+            // Delete all pending marks for this class and term
             $delete_query = "DELETE FROM marks 
                             WHERE class_id = '$class_id' 
                             AND teacher_id = '$teacher_id' 
+                            AND term = '$term'
                             AND status = 'pending'";
             
             if (mysqli_query($conn, $delete_query)) {
                 $deleted_count = mysqli_affected_rows($conn);
-                $_SESSION['success_message'] = "Successfully deleted $deleted_count pending result(s) for this class!";
+                
+                // Audit log
+                logSystemAction(
+                    $_SESSION['user_id'],
+                    $_SESSION['role'],
+                    $_SESSION['full_name'],
+                    'delete',
+                    "Deleted $deleted_count pending marks for $term in class ID: $class_id",
+                    'marks',
+                    'marks',
+                    $class_id,
+                    [
+                        'deleted_records' => $deleted_count,
+                        'class_id' => $class_id,
+                        'term' => $term
+                    ],
+                    null
+                );
+                
+                $_SESSION['success_message'] = "Successfully deleted $deleted_count pending result(s) for $term!";
             } else {
                 $_SESSION['error_message'] = "Error deleting marks: " . mysqli_error($conn);
             }
@@ -85,7 +97,7 @@ if (isset($_GET['delete_class_marks'])) {
     }
     
     // Redirect to remove delete parameter from URL
-    header("Location: view_marks.php?class_id=" . $class_id);
+    header("Location: view_marks.php?class_id=" . $class_id . "&term=" . urlencode($term));
     exit();
 }
 
@@ -106,58 +118,88 @@ $class_id = isset($_GET['class_id'])
     ? $_GET['class_id']
     : '';
 
+$term = isset($_GET['term'])
+    ? $_GET['term']
+    : 'all';
+
 /* ================= FETCH MARKS ================= */
 $marks = null;
 $has_published_marks = false;
+$has_published_term1 = false;
+$has_published_term2 = false;
 
 if (!empty($class_id)) {
-    // Check if there are any published marks in this class
-    $check_published_query = mysqli_query($conn,
+    // Check if there are any published marks in this class for Term 1
+    $check_published_term1 = mysqli_query($conn,
         "SELECT COUNT(*) as published_count 
          FROM marks 
          WHERE class_id = '$class_id' 
          AND teacher_id = '$teacher_id' 
+         AND term = 'Term 1'
          AND status = 'published'"
     );
-    $published_result = mysqli_fetch_assoc($check_published_query);
-    $has_published_marks = $published_result['published_count'] > 0;
-
-    $marks = mysqli_query($conn,
-        "SELECT
-            m.mark_id,
-            m.marks,
-            m.term,
-            m.academic_year,
-            m.status,
-
-            s.subject_name,
-
-            st.student_id,
-
-            u.full_name
-
-        FROM marks m
-
-        INNER JOIN student st
-            ON m.student_id = st.student_id
-
-        INNER JOIN users u
-            ON st.user_id = u.user_id
-
-        INNER JOIN subject s
-            ON m.subject_id = s.subject_id
-
-        WHERE
-            m.teacher_id = '$teacher_id'
-            AND m.class_id = '$class_id'
-
-        ORDER BY
-            u.full_name ASC,
-            s.subject_name ASC"
+    $published_result_term1 = mysqli_fetch_assoc($check_published_term1);
+    $has_published_term1 = $published_result_term1['published_count'] > 0;
+    
+    // Check if there are any published marks in this class for Term 2
+    $check_published_term2 = mysqli_query($conn,
+        "SELECT COUNT(*) as published_count 
+         FROM marks 
+         WHERE class_id = '$class_id' 
+         AND teacher_id = '$teacher_id' 
+         AND term = 'Term 2'
+         AND status = 'published'"
     );
+    $published_result_term2 = mysqli_fetch_assoc($check_published_term2);
+    $has_published_term2 = $published_result_term2['published_count'] > 0;
+
+    // Build marks query
+    $query = "
+    SELECT
+        m.mark_id,
+        m.marks,
+        m.term,
+        m.academic_year,
+        m.status,
+
+        s.subject_name,
+
+        st.student_id,
+
+        u.full_name
+
+    FROM marks m
+
+    INNER JOIN student st
+        ON m.student_id = st.student_id
+
+    INNER JOIN users u
+        ON st.user_id = u.user_id
+
+    INNER JOIN subject s
+        ON m.subject_id = s.subject_id
+
+    WHERE
+        m.teacher_id = '$teacher_id'
+        AND m.class_id = '$class_id'
+    ";
+
+    // Filter by term
+    if($term != 'all'){
+        $query .= " AND m.term='$term'";
+    }
+
+    // Order results
+    $query .= "
+    ORDER BY
+        u.full_name ASC,
+        s.subject_name ASC
+    ";
+
+    // Execute query
+    $marks = mysqli_query($conn, $query);
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -186,7 +228,7 @@ body{
 
 .container {
     margin-left: 270px;
-    padding: 100px 30px 30px 30px; /* FIX FOR TOPBAR */
+    padding: 100px 30px 30px 30px;
 }
 .card{
     background:white;
@@ -261,8 +303,8 @@ table{
 }
 
 th{
-    background: orange;
-    color: black;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);
+    color: white;
     padding:14px;
     text-align:left;
     font-size:14px;
@@ -302,6 +344,104 @@ tr:hover{
     color:#94a3b8;
 }
 
+.term-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.term-buttons a {
+    padding: 8px 18px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.term-buttons a:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.term-buttons a.active {
+    border: 2px solid;
+}
+
+.btn-all {
+    background: #1e293b;
+    color: white;
+}
+
+.btn-all:hover {
+    background: #0f172a;
+}
+
+.btn-term1 {
+    background: #2563eb;
+    color: white;
+}
+
+.btn-term1:hover {
+    background: #1d4ed8;
+}
+
+.btn-term2 {
+    background: #16a34a;
+    color: white;
+}
+
+.btn-term2:hover {
+    background: #15803d;
+}
+
+.btn-delete-term {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-delete-term:hover {
+    background: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+}
+
+.btn-delete-term:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+
+.btn-delete-term:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.header-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
 @media(max-width:768px){
 
     .container{
@@ -316,6 +456,20 @@ tr:hover{
 
     .form-row{
         grid-template-columns:1fr;
+    }
+    
+    .header-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .header-actions-left {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .term-buttons {
+        justify-content: center;
     }
 }
 
@@ -388,31 +542,73 @@ tr:hover{
     </div>
 
     <!-- MARKS TABLE -->
- <!-- MARKS TABLE -->
 <?php if($class_id && $marks && mysqli_num_rows($marks) > 0): ?>
 
 <div class="card">
 
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-        <h3 style="margin-bottom:0;">
-            <i class="fas fa-table"></i>
-            Students Marks
-        </h3>
+    <div class="header-actions">
+        <div class="header-actions-left">
+            <h3 style="margin-bottom:0;">
+                <i class="fas fa-table"></i>
+                Students Marks 
+                <?= ($term != 'all') ? "- ".$term : "" ?>
+            </h3>
+            
+            <!-- Term Filter Buttons -->
+            <div class="term-buttons">
+                <a href="view_marks.php?class_id=<?= $class_id ?>&term=all" class="btn-all <?= ($term == 'all') ? 'active' : '' ?>">
+                    All Terms
+                </a>
+                <a href="view_marks.php?class_id=<?= $class_id ?>&term=Term 1" class="btn-term1 <?= ($term == 'Term 1') ? 'active' : '' ?>">
+                    Term 1
+                </a>
+                <a href="view_marks.php?class_id=<?= $class_id ?>&term=Term 2" class="btn-term2 <?= ($term == 'Term 2') ? 'active' : '' ?>">
+                    Term 2
+                </a>
+            </div>
+        </div>
         
-        <?php if(!$has_published_marks): ?>
-            <button 
-                onclick="confirmDeleteClass()"
-                style="background:#ef4444;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px;transition:background 0.3s;"
-                onmouseover="this.style.background='#dc2626'"
-                onmouseout="this.style.background='#ef4444'">
-                <i class="fas fa-trash-alt"></i>
-                Delete All Class Results
-            </button>
+        <!-- Delete Button for Current Term -->
+        <?php if($term != 'all'): ?>
+            <?php 
+            $term_has_published = ($term == 'Term 1') ? $has_published_term1 : $has_published_term2;
+            ?>
+            <?php if(!$term_has_published): ?>
+                <button 
+                    onclick="confirmDeleteTerm('<?= $term ?>')"
+                    class="btn-delete-term">
+                    <i class="fas fa-trash-alt"></i>
+                    Delete <?= $term ?> Results
+                </button>
+            <?php else: ?>
+                <button class="btn-delete-term" disabled>
+                    <i class="fas fa-lock"></i>
+                    <?= $term ?> - Published
+                </button>
+            <?php endif; ?>
         <?php else: ?>
-            <span style="color:#94a3b8;font-size:14px;display:flex;align-items:center;gap:8px;">
-                <i class="fas fa-lock"></i>
-                Some results are published - cannot delete
-            </span>
+            <!-- Show delete buttons for each term when viewing all -->
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <?php if(!$has_published_term1): ?>
+                    <button onclick="confirmDeleteTerm('Term 1')" class="btn-delete-term" style="background:#2563eb;">
+                        <i class="fas fa-trash-alt"></i> Delete Term 1
+                    </button>
+                <?php else: ?>
+                    <button class="btn-delete-term" disabled style="background:#2563eb;">
+                        <i class="fas fa-lock"></i> Term 1 Published
+                    </button>
+                <?php endif; ?>
+                
+                <?php if(!$has_published_term2): ?>
+                    <button onclick="confirmDeleteTerm('Term 2')" class="btn-delete-term" style="background:#16a34a;">
+                        <i class="fas fa-trash-alt"></i> Delete Term 2
+                    </button>
+                <?php else: ?>
+                    <button class="btn-delete-term" disabled style="background:#16a34a;">
+                        <i class="fas fa-lock"></i> Term 2 Published
+                    </button>
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
     </div>
 
@@ -520,16 +716,16 @@ tr:hover{
         <div style="text-align:center;margin-bottom:20px;">
             <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#ef4444;"></i>
         </div>
-        <h3 style="text-align:center;margin-bottom:10px;color:#1e293b;">Confirm Delete All</h3>
+        <h3 style="text-align:center;margin-bottom:10px;color:#1e293b;">Confirm Delete</h3>
         <p style="text-align:center;color:#475569;margin-bottom:20px;" id="deleteMessage">
-            Are you sure you want to delete ALL pending results for this class?<br>
+            Are you sure you want to delete ALL pending results for <strong id="termName">Term 1</strong>?<br>
             <strong style="color:#dc2626;">This action cannot be undone!</strong>
         </p>
         <div style="display:flex;gap:10px;justify-content:center;">
             <button onclick="closeModal()" style="padding:10px 24px;border-radius:8px;border:1px solid #cbd5e1;background:white;cursor:pointer;">
                 Cancel
             </button>
-            <a href="view_marks.php?delete_class_marks=true&class_id=<?= $class_id ?>" id="deleteLink" style="padding:10px 24px;border-radius:8px;background:#ef4444;color:white;text-decoration:none;font-weight:bold;">
+            <a href="#" id="deleteLink" style="padding:10px 24px;border-radius:8px;background:#ef4444;color:white;text-decoration:none;font-weight:bold;">
                 Delete All
             </a>
         </div>
@@ -537,8 +733,14 @@ tr:hover{
 </div>
 
 <script>
-function confirmDeleteClass() {
+function confirmDeleteTerm(term) {
     const modal = document.getElementById('deleteModal');
+    const termName = document.getElementById('termName');
+    const deleteLink = document.getElementById('deleteLink');
+    
+    termName.textContent = term;
+    deleteLink.href = `view_marks.php?delete_term_marks=true&class_id=<?= $class_id ?>&term=${encodeURIComponent(term)}`;
+    
     modal.style.display = 'flex';
 }
 

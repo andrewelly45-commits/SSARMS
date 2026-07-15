@@ -748,7 +748,7 @@ tr:hover td {
                     <table>
                         <thead>
                             <tr>
-                                <th class="sn-column">#</th>
+                                <th class="sn-column">No</th>
                                 <th>Subject</th>
                                 <th>Department</th>
                                 <th>Teacher</th>

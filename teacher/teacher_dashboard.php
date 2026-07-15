@@ -142,7 +142,7 @@ body {
     background: #fff;
     padding: 25px;
     border-radius: 24px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    box-shadow: 0 5px 15px rgba(199, 23, 23, 0.05);
     transition: all 0.3s ease;
     border: 1px solid rgba(0,0,0,0.03);
     position: relative;
@@ -156,7 +156,7 @@ body {
     left: 0;
     width: 100%;
     height: 4px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
+    background: linear-gradient(90deg, #f0e8e7, #c1c0c2);
     transform: scaleX(0);
     transition: transform 0.3s ease;
 }
@@ -225,7 +225,7 @@ body {
 }
 
 .actions a:hover {
-    background: #f59e0b;
+   
     color: black;
     transform: translateX(5px);
 }

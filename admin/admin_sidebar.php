@@ -121,16 +121,16 @@ body {
 }
 
 .sidebar::-webkit-scrollbar-thumb {
-    background: #f59e0b;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);;
     border-radius: 5px;
 }
 
 /* ================= SIDEBAR BRAND (LOGO) ================= */
 .sidebar-brand {
     text-align: center;
-    padding: 25px 15px;
+    padding: 19px 15px;
     margin-bottom: 20px;
-    background: rgba(255,255,255,0.03);
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);;
 }
 
 .school-logo {
@@ -148,25 +148,6 @@ body {
 .school-logo:hover {
     transform: scale(1.05);
 }
-
-.sidebar-brand h3 {
-    color: #fff;
-    font-size: 20px;
-    font-weight: 700;
-    margin-bottom: 5px;
-    letter-spacing: 1px;
-}
-
-.sidebar-brand h3 span {
-    color: #f59e0b;
-}
-
-.sidebar-brand p {
-    color: #94a3b8;
-    font-size: 12px;
-    line-height: 1.5;
-}
-
 
 /* MENU LINKS */
 .menu {

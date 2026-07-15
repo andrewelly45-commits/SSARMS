@@ -126,7 +126,7 @@ body {
 }
 
 .card-header {
-    background: orange;
+    background: white;
     padding: 25px;
     color: black;
 }
@@ -188,6 +188,7 @@ tr:hover td {
 <body>
 
 <?php include 'teacher_sidebar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
 

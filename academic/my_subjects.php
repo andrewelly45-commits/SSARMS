@@ -87,8 +87,8 @@ $subjects_query = mysqli_query($conn, "
         }
 
         th {
-            background: orange;
-            color: black;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);
+            color: white;
             padding: 14px;
             text-align: left;
             font-weight: 600;
@@ -105,7 +105,6 @@ $subjects_query = mysqli_query($conn, "
         }
 
         .sn-badge {
-            background: orange;
             color: black;
             width: 32px;
             height: 32px;
@@ -167,10 +166,9 @@ $subjects_query = mysqli_query($conn, "
 </head>
 <body>
 
-
 <?php include 'academic_sidebar.php'; ?>
-<?php include '../auth/topbar.php'; ?>
 
+<?php include '../auth/topbar.php'; ?>
 
 <div class="container">
     <div class="card">

@@ -43,19 +43,32 @@ $query = mysqli_query($conn, "
     ORDER BY sr.average DESC
 ");
 
-/* ================= STATISTICS QUERY ================= */
-$stats = mysqli_query($conn, "
+/* ================= STATISTICS QUERY - USING SAME FILTERS ================= */
+$stats_query = "
     SELECT 
         COUNT(*) as total_students,
         SUM(CASE WHEN division='Division I' THEN 1 ELSE 0 END) as div1,
         SUM(CASE WHEN division='Division II' THEN 1 ELSE 0 END) as div2,
         SUM(CASE WHEN division='Division III' THEN 1 ELSE 0 END) as div3,
         SUM(CASE WHEN division='Division IV' THEN 1 ELSE 0 END) as div4,
-        SUM(CASE WHEN division='INC' THEN 1 ELSE 0 END) as inc
-    FROM student_results
-");
+        SUM(CASE WHEN division='INC' THEN 1 ELSE 0 END) as inc,
+        ROUND(AVG(average), 2) as overall_average,
+        MAX(average) as highest_score,
+        MIN(average) as lowest_score
+    FROM student_results sr
+    $where
+";
 
+$stats = mysqli_query($conn, $stats_query);
 $stat = mysqli_fetch_assoc($stats);
+
+// Calculate pass rate
+$total = $stat['total_students'] > 0 ? $stat['total_students'] : 1;
+$passed = ($stat['div1'] ?? 0) + ($stat['div2'] ?? 0) + ($stat['div3'] ?? 0);
+$pass_rate = round(($passed / $total) * 100, 2);
+
+// Debug - you can remove this after testing
+// echo "Stats Query: " . $stats_query;
 ?>
 
 <!DOCTYPE html>
@@ -83,7 +96,7 @@ $stat = mysqli_fetch_assoc($stats);
         /* ===== MAIN CONTENT ===== */
         .main-content {
             margin-left: 270px;
-            margin-top: 75px; /* Space from topbar */
+            margin-top: 75px;
             padding: 25px 30px;
             min-height: calc(100vh - 75px);
         }
@@ -99,15 +112,63 @@ $stat = mysqli_fetch_assoc($stats);
         .card-stats {
             background: #ffffff;
             border-radius: 8px;
-            padding: 10px 18px;
+            padding: 12px 18px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
             font-weight: 600;
             font-size: 14px;
             border-left: 4px solid #4f46e5;
+            transition: all 0.3s;
+            min-width: 120px;
+        }
+
+        .card-stats:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-stats .stat-number {
+            font-size: 22px;
+            font-weight: 700;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .card-stats .stat-label {
+            font-size: 13px;
+            color: #64748b;
+            font-weight: 400;
         }
 
         .card-stats.inc {
             border-left-color: #f59e0b;
+        }
+
+        .card-stats.primary {
+            border-left-color: #4f46e5;
+        }
+
+        .card-stats.success {
+            border-left-color: #10b981;
+        }
+
+        .card-stats.info {
+            border-left-color: #3b82f6;
+        }
+
+        .card-stats.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .card-stats.danger {
+            border-left-color: #ef4444;
+        }
+
+        .card-stats.purple {
+            border-left-color: #8b5cf6;
+        }
+
+        .card-stats.pink {
+            border-left-color: #ec4899;
         }
 
         /* ===== PAGE TITLE ===== */
@@ -167,12 +228,46 @@ $stat = mysqli_fetch_assoc($stats);
             margin-right: 6px;
         }
 
+        .filters .btn-reset {
+            background: #94a3b8;
+        }
+
+        .filters .btn-reset:hover {
+            background: #64748b;
+        }
+
         /* ===== STATISTICS ROW ===== */
         .stats-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 12px;
-            flex-wrap: wrap;
             margin-bottom: 20px;
+        }
+
+        /* ===== FILTER INFO ===== */
+        .filter-info {
+            background: #f1f5f9;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #475569;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filter-info .badge {
+            background: #4f46e5;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin: 2px;
         }
 
         /* ===== TABLE ===== */
@@ -274,11 +369,11 @@ $stat = mysqli_fetch_assoc($stats);
             }
 
             .stats-row {
-                flex-direction: column;
+                grid-template-columns: repeat(2, 1fr);
             }
 
             .card-stats {
-                width: 100%;
+                min-width: unset;
             }
 
             table {
@@ -305,6 +400,10 @@ $stat = mysqli_fetch_assoc($stats);
                 padding: 15px;
             }
 
+            .stats-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
             table {
                 font-size: 12px;
             }
@@ -312,6 +411,10 @@ $stat = mysqli_fetch_assoc($stats);
             thead th,
             tbody td {
                 padding: 8px 10px;
+            }
+
+            .card-stats .stat-number {
+                font-size: 18px;
             }
         }
 
@@ -333,6 +436,20 @@ $stat = mysqli_fetch_assoc($stats);
 
         ::-webkit-scrollbar-thumb:hover {
             background: #4338ca;
+        }
+
+        /* ===== REFRESH INDICATOR ===== */
+        .last-updated {
+            font-size: 12px;
+            color: #94a3b8;
+            text-align: right;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .last-updated i {
+            margin-right: 5px;
         }
     </style>
 </head>
@@ -395,33 +512,86 @@ $stat = mysqli_fetch_assoc($stats);
                 <button type="submit">
                     <i class="fas fa-search"></i> Filter
                 </button>
+
+                <?php if (!empty($term) || !empty($year) || !empty($class_id)): ?>
+                    <a href="school_results.php" class="filters btn-reset" style="
+                        padding: 10px 16px;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        background: #94a3b8;
+                        color: #ffffff;
+                        text-decoration: none;
+                        font-weight: 600;
+                        transition: all 0.2s;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    ">
+                        <i class="fas fa-undo"></i> Reset
+                    </a>
+                <?php endif; ?>
             </form>
+
+            <!-- Filter Info -->
+            <?php if (!empty($term) || !empty($year) || !empty($class_id)): ?>
+                <div class="filter-info">
+                    <span>
+                        <i class="fas fa-filter"></i> 
+                        Showing filtered results:
+                        <?php if (!empty($term)): ?>
+                            <span class="badge"><?= $term ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($year)): ?>
+                            <span class="badge"><?= $year ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($class_id)): ?>
+                            <span class="badge">
+                                <?php 
+                                    $class_name = mysqli_fetch_assoc(mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'"));
+                                    echo $class_name['class_name'] ?? $class_id;
+                                ?>
+                            </span>
+                        <?php endif; ?>
+                    </span>
+                    <span>
+                        Total: <strong><?= $stat['total_students'] ?? 0 ?></strong> students
+                    </span>
+                </div>
+            <?php endif; ?>
 
             <!-- Statistics -->
             <div class="stats-row">
-                <div class="card-stats">
-                    <i class="fas fa-users" style="color: #4f46e5;"></i>
-                    Total: <?= $stat['total_students'] ?>
+                <div class="card-stats primary">
+                    <span class="stat-label"><i class="fas fa-users"></i> Total</span>
+                    <span class="stat-number"><?= $stat['total_students'] ?? 0 ?></span>
                 </div>
-                <div class="card-stats" style="border-left-color: #10b981;">
-                    <i class="fas fa-trophy" style="color: #10b981;"></i>
-                    DIV I: <?= $stat['div1'] ?>
+                <div class="card-stats success">
+                    <span class="stat-label"><i class="fas fa-trophy"></i> Division I</span>
+                    <span class="stat-number"><?= $stat['div1'] ?? 0 ?></span>
                 </div>
-                <div class="card-stats" style="border-left-color: #3b82f6;">
-                    <i class="fas fa-award" style="color: #3b82f6;"></i>
-                    DIV II: <?= $stat['div2'] ?>
+                <div class="card-stats info">
+                    <span class="stat-label"><i class="fas fa-award"></i> Division II</span>
+                    <span class="stat-number"><?= $stat['div2'] ?? 0 ?></span>
                 </div>
-                <div class="card-stats" style="border-left-color: #f59e0b;">
-                    <i class="fas fa-medal" style="color: #f59e0b;"></i>
-                    DIV III: <?= $stat['div3'] ?>
+                <div class="card-stats warning">
+                    <span class="stat-label"><i class="fas fa-medal"></i> Division III</span>
+                    <span class="stat-number"><?= $stat['div3'] ?? 0 ?></span>
                 </div>
-                <div class="card-stats" style="border-left-color: #ef4444;">
-                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
-                    DIV IV: <?= $stat['div4'] ?>
+                <div class="card-stats danger">
+                    <span class="stat-label"><i class="fas fa-exclamation-triangle"></i> Division IV</span>
+                    <span class="stat-number"><?= $stat['div4'] ?? 0 ?></span>
                 </div>
                 <div class="card-stats inc">
-                    <i class="fas fa-clock" style="color: #f59e0b;"></i>
-                    INC: <?= $stat['inc'] ?>
+                    <span class="stat-label"><i class="fas fa-clock"></i> INC</span>
+                    <span class="stat-number"><?= $stat['inc'] ?? 0 ?></span>
+                </div>
+                <div class="card-stats purple">
+                    <span class="stat-label"><i class="fas fa-check-circle"></i> Pass Rate</span>
+                    <span class="stat-number"><?= $pass_rate ?>%</span>
+                </div>
+                <div class="card-stats pink">
+                    <span class="stat-label"><i class="fas fa-arrow-up"></i> Avg Score</span>
+                    <span class="stat-number"><?= $stat['overall_average'] ?? 0 ?>%</span>
                 </div>
             </div>
 
@@ -493,6 +663,12 @@ $stat = mysqli_fetch_assoc($stats);
                         <?php } ?>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Last Updated -->
+            <div class="last-updated">
+                <i class="fas fa-sync-alt"></i>
+                Last updated: <?= date('Y-m-d H:i:s') ?>
             </div>
 
         </div>

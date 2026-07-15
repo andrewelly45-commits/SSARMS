@@ -293,6 +293,12 @@ if (!file_exists($logo_path)) {
             Approve Results
         </a>
 
+        <a href="delete_results.php">
+            <i class="fas fa-check-result"></i>
+            Actions
+        </a>
+
+
     </div>
 
 </div>

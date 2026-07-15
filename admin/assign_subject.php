@@ -410,12 +410,9 @@ unset($_SESSION['msg_type']);
 <body>
 
 <?php include 'admin_sidebar.php'; ?>
-<?php include 'admin_topbar.php'; ?>
+<?php include '../auth/topbar.php'; ?>
 
 <div class="main">
-    <a href="manage_teachers.php" class="back-link">
-        <i class="fas fa-arrow-left"></i> Back to Teachers
-    </a>
     
     <div class="card">
         <div class="card-header">

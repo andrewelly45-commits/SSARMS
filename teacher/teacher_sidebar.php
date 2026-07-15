@@ -384,6 +384,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <i class="fas fa-chart-line"></i>
             View Marks
         </a>
+
     </div>
 
 </div>

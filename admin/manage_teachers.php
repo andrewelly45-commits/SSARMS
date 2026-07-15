@@ -11,9 +11,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
     exit();
 }
 
-/* =========================
-   ADD TEACHER
-========================= */
+            /*  ADD TEACHER  */
 if (isset($_POST['add_teacher'])) {
     $name = mysqli_real_escape_string($conn, $_POST['full_name']);
     $email = mysqli_real_escape_string($conn, $_POST['email']);
@@ -51,9 +49,7 @@ if (isset($_POST['add_teacher'])) {
     exit();
 }
 
-/* =========================
-   EDIT TEACHER
-========================= */
+/* EDIT TEACHER  */
 if (isset($_POST['edit_teacher'])) {
     $teacher_id = (int)$_POST['teacher_id'];
     $name = mysqli_real_escape_string($conn, $_POST['full_name']);
@@ -86,9 +82,7 @@ if (isset($_POST['edit_teacher'])) {
     exit();
 }
 
-/* =========================
-   SUSPEND/ACTIVATE TEACHER
-========================= */
+/* SUSPEND/ACTIVATE TEACHER  */
 if (isset($_GET['suspend']) || isset($_GET['activate'])) {
     $action = isset($_GET['suspend']) ? 'suspend' : 'activate';
     $teacher_id = (int)$_GET[$action];
@@ -107,9 +101,7 @@ if (isset($_GET['suspend']) || isset($_GET['activate'])) {
     exit();
 }
 
-/* =========================
-   FETCH DATA
-========================= */
+/*  FETCH DATA  */
 $search = isset($_GET['search']) ? trim(mysqli_real_escape_string($conn, $_GET['search'])) : '';
 $classes = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name ASC");
 $departments = mysqli_query($conn, "SELECT * FROM department ORDER BY department_name ASC");
@@ -147,9 +139,7 @@ if (!empty($search)) {
 $query .= " GROUP BY t.teacher_id ORDER BY t.teacher_id DESC";
 $teachers = mysqli_query($conn, $query);
 
-/* =========================
-   ASSIGN SUBJECT
-========================= */
+/* ASSIGN SUBJECT     */
 if(isset($_POST['assign_subject'])){
     $teacher_id = (int)$_POST['teacher_id'];
     $subject_id = (int)$_POST['subject_id'];
@@ -206,7 +196,7 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
         input:focus, select:focus { border-color: #f59e0b; outline: none; box-shadow: 0 0 0 3px rgba(245,158,11,0.2); }
         
         /* Buttons */
-        .btn-primary { background: #074591; color: white; border: none; font-weight: 600; padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: #082242ee !important; color: white; border: none; font-weight: 600; padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
         .btn-primary:hover { background: #05306a; }
         .btn-search { background: #64748b; color: white; border: none; font-weight: 600; padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
         .btn-search:hover { background: #475569; }
@@ -218,8 +208,8 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
         .btn-suspend:hover { background: #fecaca; }
         .btn-activate { background: #dcfce7; color: #15803d; padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
         .btn-activate:hover { background: #bbf7d0; }
-        .btn-assign { background: #dbeafe; color: #1d4ed8; padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
-        .btn-assign:hover { background: #bfdbfe; }
+        .btn-assign { background: white; color: #1d4ed8; padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-assign:hover { background: white; }
         
         /* Checkbox Group */
         .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fafcff; }
@@ -279,7 +269,7 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
 <?php include '../auth/topbar.php'; ?>
 
 <div class="container">
-    <h2><i class="fas fa-chalkboard-user" style="color: #074591;"></i> Manage Teachers</h2>
+    <h2><i class="fas fa-chalkboard-user" style="color: #0e0f0ff5;"></i> Manage Teachers</h2>
     
     <?php if (isset($_SESSION['success_msg'])): ?>
         <div class="alert alert-success">
@@ -297,7 +287,7 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
 
     <!-- ADD TEACHER -->
     <div class="card">
-        <h3><i class="fas fa-user-plus" style="color: #074591;"></i> Add Teacher</h3>
+        <h3><i class="fas fa-user-plus" style="color: #0d0d0ef6;"></i> Add Teacher</h3>
         <form method="POST">
             <div class="form-grid">
                 <div class="input-group">
@@ -359,7 +349,7 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
 
     <!-- TEACHERS LIST -->
     <div class="card">
-        <h3><i class="fas fa-users" style="color: #074591;"></i> Teachers List</h3>
+        <h3><i class="fas fa-users" style="color: #151616f6;"></i> Teachers List</h3>
         
         <!-- Search -->
         <div class="search-section">
@@ -375,7 +365,7 @@ $subjects = mysqli_query($conn, "SELECT * FROM subject ORDER BY subject_name ASC
             <table>
                 <thead>
                     <tr>
-                        <th style="width:50px;">#</th>
+                        <th style="width:50px;">No</th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Gender</th>

@@ -10,7 +10,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// ================= SCHOOL CODE =================
+//  SCHOOL CODE 
 $result = mysqli_query($conn, "SELECT school_code FROM school_settings LIMIT 1");
 if(mysqli_num_rows($result) == 0) {
     $_SESSION['error_msg'] = "Please configure School Settings before registering students.";
@@ -20,7 +20,7 @@ if(mysqli_num_rows($result) == 0) {
 $school = mysqli_fetch_assoc($result);
 $school_code = $school['school_code'];
 
-// ================= ADMISSION NUMBER =================
+//  ADMISSION NUMBER 
 function generateAdmissionNo($conn) {
     $year = date("Y");
     $query = mysqli_query($conn, "SELECT admission_no FROM student WHERE admission_no LIKE 'ADM/$year/%' ORDER BY CAST(SUBSTRING_INDEX(admission_no,'/',-1) AS UNSIGNED) DESC LIMIT 1");
@@ -40,7 +40,7 @@ function generateAdmissionNo($conn) {
     return $admission;
 }
 
-// ================= REGISTRATION NUMBER =================
+//  REGISTRATION NUMBER 
 function generateRegistrationNo($conn, $class_id, $school_code) {
     $class = mysqli_fetch_assoc(mysqli_query($conn, "SELECT reg_prefix FROM class WHERE class_id='$class_id'"));
     $prefix = $class['reg_prefix'];
@@ -62,7 +62,7 @@ function generateRegistrationNo($conn, $class_id, $school_code) {
     return $registration;
 }
 
-// ================= ADD STUDENT =================
+//  ADD STUDENT 
 if(isset($_POST['add_student'])) {
     $name = mysqli_real_escape_string($conn, $_POST['full_name']);
     $email = mysqli_real_escape_string($conn, $_POST['email']);
@@ -96,7 +96,7 @@ if(isset($_POST['add_student'])) {
     exit();
 }
 
-// ================= UPDATE STUDENT =================
+//  UPDATE STUDENT 
 if(isset($_POST['edit_student'])) {
     $student_id = (int)$_POST['student_id'];
     $name = mysqli_real_escape_string($conn, $_POST['full_name']);
@@ -122,7 +122,7 @@ if(isset($_POST['edit_student'])) {
     exit();
 }
 
-// ================= SUSPEND/ACTIVATE STUDENT =================
+// SUSPEND/ACTIVATE STUDENT 
 if(isset($_GET['suspend']) || isset($_GET['activate'])) {
     $action = isset($_GET['suspend']) ? 'suspend' : 'activate';
     $student_id = (int)$_GET[$action];
@@ -137,7 +137,7 @@ if(isset($_GET['suspend']) || isset($_GET['activate'])) {
     exit();
 }
 
-// ================= SEARCH =================
+//  SEARCH 
 $search = isset($_GET['search']) ? trim(mysqli_real_escape_string($conn, $_GET['search'])) : '';
 
 $query = "SELECT s.student_id, s.user_id, s.registration_no, s.admission_no, u.full_name, u.email, u.phone, u.gender, u.status, c.class_id, c.class_name, s.academic_year, s.date_of_birth
@@ -171,12 +171,10 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Students | SSARMS</title>
+    <title>Manage Students SSARMS</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* ============================================
-                   RESET & BASE STYLES
-                   ============================================ */
+      
         * {
             margin: 0;
             padding: 0;
@@ -189,9 +187,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             color: #1e293b;
         }
 
-        /* ============================================
-                   LAYOUT
-                   ============================================ */
         .container {
             margin-left: 270px;
             margin-top: 85px;
@@ -208,9 +203,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             border: 1px solid #e2e8f0;
         }
 
-        /* ============================================
-                   TYPOGRAPHY
-                   ============================================ */
         h2 {
             font-size: 24px;
             font-weight: 700;
@@ -222,7 +214,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
         }
 
         h2 i {
-            color: #074591;
+            color: black;
         }
 
         h3 {
@@ -236,12 +228,9 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
         }
 
         h3 i {
-            color: #074591;
+            color: black;
         }
 
-        /* ============================================
-                   ALERTS
-                   ============================================ */
         .alert {
             padding: 14px 20px;
             border-radius: 12px;
@@ -276,9 +265,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             color: #991b1b;
         }
 
-        /* ============================================
-                   FORMS
-                   ============================================ */
         .form-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -300,7 +286,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
         }
 
         .input-group label i {
-            color: #074591;
+            color: black;
             width: 18px;
         }
 
@@ -327,30 +313,26 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             cursor: not-allowed;
         }
 
-        /* ============================================
-                   BUTTONS
-                   ============================================ */
-        .btn-primary {
-            background: #074591;
-            color: white;
-            border: none;
-            font-weight: 600;
-            padding: 10px 22px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-primary:hover {
-            background: #05306a;
-        }
+       /* Make button more visible */
+.btn-primary {
+    background: #061d3ade !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 600 !important;
+    padding: 12px 30px !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+    transition: 0.2s !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    justify-content: center !important;
+}
 
         .btn-search {
-            background: #64748b;
+            background: #04367c;
             color: white;
             border: none;
             font-weight: 600;
@@ -362,10 +344,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             display: inline-flex;
             align-items: center;
             gap: 8px;
-        }
-
-        .btn-search:hover {
-            background: #475569;
         }
 
         .btn-clear {
@@ -382,10 +360,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             align-items: center;
             gap: 8px;
             text-decoration: none;
-        }
-
-        .btn-clear:hover {
-            background: #cbd5e1;
         }
 
         .btn-edit {
@@ -445,9 +419,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             background: #bbf7d0;
         }
 
-        /* ============================================
-                   TABLE
-                   ============================================ */
         .table-wrapper {
             overflow-x: auto;
             border-radius: 12px;
@@ -502,9 +473,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             color: #94a3b8;
         }
 
-        /* ============================================
-                   STATUS & GENDER LABELS
-                   ============================================ */
+
         .status-active {
             color: #15803d;
             font-weight: 600;
@@ -526,7 +495,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
         }
 
         .class-badge {
-            background: #f1f5f9;
             padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
@@ -536,9 +504,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             gap: 5px;
         }
 
-        /* ============================================
-                   SEARCH SECTION
-                   ============================================ */
         .search-section {
             display: flex;
             gap: 12px;
@@ -558,9 +523,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             margin-top: 10px;
         }
 
-        /* ============================================
-                   ACTION BUTTONS
-                   ============================================ */
         .action-buttons {
             display: flex;
             flex-wrap: wrap;
@@ -568,9 +530,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             align-items: center;
         }
 
-        /* ============================================
-                   STAT BADGE
-                   ============================================ */
+
         .stat-badge {
             background: #f8fafc;
             padding: 8px 20px;
@@ -588,9 +548,6 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             color: #074591;
         }
 
-        /* ============================================
-                   MODAL
-                   ============================================ */
         .modal {
             display: none;
             position: fixed;
@@ -639,9 +596,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             color: #000;
         }
 
-        /* ============================================
-                   MOBILE TOGGLE
-                   ============================================ */
+
         .mobile-toggle {
             display: none;
             position: fixed;
@@ -657,9 +612,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             font-size: 18px;
         }
 
-        /* ============================================
-                   RESPONSIVE
-                   ============================================ */
+
         @media (max-width: 768px) {
             .sidebar {
                 left: -280px;
@@ -747,7 +700,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                         <input type="text" value="<?= generateAdmissionNo($conn); ?>" readonly>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-user"></i> Full Name <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-user"></i> Full Name </label>
                         <input type="text" name="full_name" placeholder="Student name" required>
                     </div>
                     <div class="input-group">
@@ -755,19 +708,19 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                         <input type="text" id="registration_no_display" value="Select class first" readonly>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-envelope"></i> Email <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-envelope"></i> Email </label>
                         <input type="email" name="email" placeholder="student@example.com" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-lock"></i> Password <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-lock"></i> Password </label>
                         <input type="password" name="password" placeholder="********" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-calendar"></i> Date of Birth <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-calendar"></i> Date of Birth </label>
                         <input type="date" name="date_of_birth" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-school"></i> Class <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-school"></i> Class </label>
                         <select name="class_id" id="class_id" required>
                             <option value="">-- Select Class --</option>
                             <?php mysqli_data_seek($classes, 0);
@@ -777,11 +730,11 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                         </select>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-phone"></i> Phone <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-phone"></i> Phone </label>
                         <input type="text" name="phone" placeholder="07XXXXXXXX" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-venus-mars"></i> Gender <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-venus-mars"></i> Gender </label>
                         <select name="gender" required>
                             <option value="">Select Gender</option>
                             <option value="male">Male</option>
@@ -792,10 +745,10 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                         <label><i class="fas fa-calendar-alt"></i> Academic Year</label>
                         <input type="number" id="academicYear" value="<?= date('Y') ?>" readonly>
                     </div>
-                    <div class="input-group" style="display:flex; align-items:flex-end;">
-                        <button type="submit" name="add_student" class="btn-primary">
-                            <i class="fas fa-save"></i> Add Student
-                        </button>
+                    <div class="input-group" style="display:flex; align-items:center; justify-content:flex-end; margin-top:10px;">
+                        <button type="submit" name="add_student" class="btn-primary" style="width:100%; padding:12px; font-size:14px; font-weight:600;">
+                          <i class="fas fa-save"></i> Add Student
+                       </button>
                     </div>
                 </div>
             </form>
@@ -825,7 +778,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                 <table>
                     <thead>
                         <tr>
-                            <th style="width:50px;">#</th>
+                            <th style="width:50px;">No</th>
                             <th>Name</th>
                             <th>Reg No</th>
                             <th>Email</th>
@@ -906,19 +859,19 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                 <input type="hidden" name="student_id" id="edit_student_id">
                 <div class="form-grid">
                     <div class="input-group">
-                        <label><i class="fas fa-user"></i> Full Name <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-user"></i> Full Name </label>
                         <input type="text" name="full_name" id="edit_full_name" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-envelope"></i> Email <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-envelope"></i> Email </label>
                         <input type="email" name="email" id="edit_email" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-calendar"></i> Date of Birth <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-calendar"></i> Date of Birth </label>
                         <input type="date" name="date_of_birth" id="edit_date_of_birth" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-school"></i> Class <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-school"></i> Class </label>
                         <select name="class_id" id="edit_class_id" required>
                             <?php mysqli_data_seek($classes_edit, 0);
                             while ($c = mysqli_fetch_assoc($classes_edit)): ?>
@@ -927,11 +880,11 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                         </select>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-phone"></i> Phone <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-phone"></i> Phone </label>
                         <input type="text" name="phone" id="edit_phone" required>
                     </div>
                     <div class="input-group">
-                        <label><i class="fas fa-venus-mars"></i> Gender <span style="color:red;">*</span></label>
+                        <label><i class="fas fa-venus-mars"></i> Gender</label>
                         <select name="gender" id="edit_gender" required>
                             <option value="male">Male</option>
                             <option value="female">Female</option>
@@ -947,9 +900,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
     </div>
 
     <script>
-        // ============================================
         // AUTO-HIDE ALERTS
-        // ============================================
         setTimeout(() => {
             document.querySelectorAll('.alert').forEach(alert => {
                 setTimeout(() => {
@@ -960,15 +911,12 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             });
         }, 500);
 
-        // ============================================
         // UPDATE STUDENT COUNT
-        // ============================================
         document.getElementById('studentCountSpan').innerText =
             document.querySelectorAll('#studentTableBody tr:not(.empty-row)').length;
 
-        // ============================================
+
         // EDIT MODAL FUNCTIONS
-        // ============================================
         function openEditModal(id, name, email, phone, gender, classId, dob) {
             document.getElementById('edit_student_id').value = id;
             document.getElementById('edit_full_name').value = name;
@@ -988,9 +936,9 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             if (e.target == document.getElementById('editModal')) closeEditModal();
         };
 
-        // ============================================
+       
         // GENERATE REGISTRATION NUMBER
-        // ============================================
+        
         document.getElementById('class_id').addEventListener('change', function() {
             let regField = document.getElementById('registration_no_display');
             if (!this.value) {
@@ -1004,9 +952,8 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
                 .catch(() => regField.value = "Error generating number");
         });
 
-        // ============================================
         // SEARCH FUNCTIONS
-        // ============================================
+       
         document.getElementById('searchInput')?.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') searchStudents();
         });
@@ -1027,9 +974,7 @@ $classes_edit = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name");
             window.location.href = url.toString();
         }
 
-        // ============================================
         // MOBILE SIDEBAR TOGGLE
-        // ============================================
         document.querySelector('.mobile-toggle')?.addEventListener('click', function() {
             document.getElementById('sidebar').classList.toggle('active');
         });

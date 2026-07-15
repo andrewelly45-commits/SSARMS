@@ -141,12 +141,11 @@ $avatar_letter = strtoupper(substr($full_name, 0, 1));
 .brand-logo {
     width: 38px;
     height: 38px;
-    background: linear-gradient(135deg, #074591, #0a5cb5);
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: black;
     font-size: 18px;
 }
 

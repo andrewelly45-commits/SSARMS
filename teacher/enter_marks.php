@@ -84,6 +84,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body { background: #f1f5f9; font-family: 'Segoe UI', sans-serif; }
         
         .container {
@@ -108,7 +109,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
             gap: 12px;
         }
         
-        h2 i { color: #f59e0b; }
+        h2 i { color: #131212; }
         
         h3 {
             font-size: 18px;
@@ -119,7 +120,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
             gap: 10px;
         }
         
-        h3 i { color: #f59e0b; }
+        h3 i { color: #111111; }
         
         .form-row {
             display: grid;
@@ -164,8 +165,8 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
         }
         
         .btn:hover { transform: translateY(-2px); }
-        .btn-load { background: #f59e0b; color: black; }
-        .btn-load:hover { background: #d97706; }
+        .btn-load { background: #00020a; color: white; }
+        .btn-load:hover { background: #0f0f0e; }
         .btn-save { background: #16a34a; }
         .btn-save:hover { background: #15803d; }
         .btn-info { background: #3b82f6; }
@@ -193,8 +194,8 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
         }
         
         .step-number {
-            background: #f59e0b;
-            color: black;
+            background: black;
+            color: white;
             width: 40px;
             height: 40px;
             border-radius: 50%;
@@ -282,7 +283,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
         }
         
         .student-info i {
-            color: #f59e0b;
+            color: #0a0a0a;
             font-size: 20px;
         }
         
@@ -423,7 +424,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
                     <input type="hidden" name="class_id" value="<?= $class_id ?>">
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Subject <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Subject</label>
                         <select name="subject_id" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #dbe2ea;">
                             <option value="">-- Select Subject --</option>
                             <?php 
@@ -438,17 +439,16 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
                     </div>
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Term <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Term</label>
                         <select name="term" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #dbe2ea;">
                             <option value="">-- Select Term --</option>
                             <option value="Term 1">Term 1</option>
                             <option value="Term 2">Term 2</option>
-                            <option value="Term 3">Term 3</option>
                         </select>
                     </div>
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Academic Year <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Academic Year</label>
                         <input type="text" name="academic_year" value="<?= date('Y') ?>" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #dbe2ea;">
                     </div>
                     
@@ -458,7 +458,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
                 </form>
             </div>
             
-            <!-- Step 2: Enter Marks in Excel -->
+
            <!-- Step 2: Enter Marks in Excel -->
 <div class="step-card">
     <div class="step-number">2</div>
@@ -490,7 +490,7 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
                     <input type="hidden" name="class_id" value="<?= $class_id ?>">
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Subject <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Subject</label>
                         <select name="subject_id" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #dbe2ea;">
                             <option value="">-- Select Subject --</option>
                             <?php 
@@ -505,22 +505,21 @@ if (isset($_SESSION['success_msg']) || isset($_SESSION['error_msg']) || isset($_
                     </div>
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Term <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Term </label>
                         <select name="term" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #dbe2ea;">
                             <option value="">-- Select Term --</option>
                             <option value="Term 1">Term 1</option>
                             <option value="Term 2">Term 2</option>
-                            <option value="Term 3">Term 3</option>
                         </select>
                     </div>
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Academic Year <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Academic Year</label>
                         <input type="text" name="academic_year" value="<?= date('Y') ?>" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #dbe2ea;">
                     </div>
                     
                     <div style="text-align: left; margin-bottom: 15px;">
-                        <label style="font-size: 12px;">Select Excel File <span style="color:red;">*</span></label>
+                        <label style="font-size: 12px;">Select Excel File</label>
                         <input type="file" name="marks_file" accept=".xlsx,.xls,.csv" required style="width:100%; padding:10px; border:1px solid #dbe2ea; border-radius:10px;">
                     </div>
                     
