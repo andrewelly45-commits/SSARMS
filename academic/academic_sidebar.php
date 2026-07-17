@@ -294,7 +294,7 @@ if (!file_exists($logo_path)) {
         </a>
 
         <a href="delete_results.php">
-            <i class="fas fa-check-result"></i>
+            <i class="fas fa-bolt"></i>
             Actions
         </a>
 
