@@ -264,6 +264,7 @@ while ($row = mysqli_fetch_assoc($assignments)) {
 <title>Manage Subjects | SSARMS</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <style>
+/* ===== RESET & BASE ===== */
 * {
     margin: 0;
     padding: 0;
@@ -273,10 +274,15 @@ while ($row = mysqli_fetch_assoc($assignments)) {
 body {
     background: #f0f2f5;
     font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
+/* ===== MAIN LAYOUT ===== */
 .main-wrapper {
     display: flex;
+    flex: 1;
     min-height: 100vh;
 }
 
@@ -284,15 +290,26 @@ body {
     flex: 1;
     margin-left: 270px;
     margin-top: 85px;
-    padding: 20px 30px;
+    padding: 20px 30px 30px;
     min-height: calc(100vh - 85px);
+    display: flex;
+    flex-direction: column;
 }
 
 .container {
     max-width: 1400px;
     margin: 0 auto;
+    width: 100%;
+    flex: 1;
 }
 
+/* ===== FOOTER WRAPPER ===== */
+.footer-wrapper {
+    margin-top: auto;
+    padding-top: 20px;
+}
+
+/* ===== TYPOGRAPHY ===== */
 h2 {
     font-size: 24px;
     font-weight: 700;
@@ -313,6 +330,7 @@ h3 {
     gap: 8px;
 }
 
+/* ===== ALERTS ===== */
 .alert {
     padding: 14px 20px;
     border-radius: 12px;
@@ -341,6 +359,7 @@ h3 {
     color: #991b1b;
 }
 
+/* ===== CARDS ===== */
 .card {
     background: white;
     padding: 24px;
@@ -354,10 +373,12 @@ h3 {
     margin-bottom: 0;
 }
 
+/* ===== GRID ===== */
 .grid-2 {
     display: grid;
     grid-template-columns: 1fr 2fr;
     gap: 25px;
+    flex: 1;
 }
 
 @media (max-width: 1024px) {
@@ -366,6 +387,7 @@ h3 {
     }
 }
 
+/* ===== FORM ELEMENTS ===== */
 .input-group {
     display: flex;
     flex-direction: column;
@@ -401,6 +423,7 @@ input:focus, select:focus {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+/* ===== BUTTONS ===== */
 button {
     background: #1a2332;
     color: white;
@@ -443,6 +466,7 @@ button:hover {
     border-radius: 8px;
 }
 
+/* ===== TABLES ===== */
 .table-wrapper {
     overflow-x: auto;
     margin-top: 10px;
@@ -478,6 +502,7 @@ tr:hover td {
     background: #f8fafc;
 }
 
+/* ===== SUBJECT CARDS ===== */
 .subject-card {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -554,6 +579,7 @@ tr:hover td {
     font-size: 12px;
 }
 
+/* ===== ACTION LINKS ===== */
 .action-links {
     display: flex;
     gap: 5px;
@@ -580,6 +606,7 @@ tr:hover td {
 
 .btn-edit:hover {
     background: #bfdbfe;
+    transform: none;
 }
 
 .btn-remove {
@@ -589,6 +616,7 @@ tr:hover td {
 
 .btn-remove:hover {
     background: #fecaca;
+    transform: none;
 }
 
 .btn-delete {
@@ -598,8 +626,10 @@ tr:hover td {
 
 .btn-delete:hover {
     background: #fecaca;
+    transform: none;
 }
 
+/* ===== MODALS ===== */
 .modal {
     display: none;
     position: fixed;
@@ -651,6 +681,7 @@ tr:hover td {
     transform: none;
 }
 
+/* ===== MOBILE TOGGLE ===== */
 .mobile-toggle {
     display: none;
     position: fixed;
@@ -670,6 +701,7 @@ tr:hover td {
     transform: none;
 }
 
+/* ===== STATUS BADGE ===== */
 .status-badge {
     padding: 2px 10px;
     border-radius: 12px;
@@ -687,6 +719,7 @@ tr:hover td {
     color: #991b1b;
 }
 
+/* ===== EMPTY STATE ===== */
 .empty-state {
     text-align: center;
     padding: 40px 20px;
@@ -709,11 +742,12 @@ tr:hover td {
     font-weight: 600;
 }
 
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
     .content-wrapper {
         margin-left: 0;
         margin-top: 80px;
-        padding: 15px;
+        padding: 15px 15px 20px;
     }
     
     .mobile-toggle {
@@ -739,7 +773,7 @@ tr:hover td {
 
 @media (max-width: 480px) {
     .content-wrapper {
-        padding: 10px;
+        padding: 10px 10px 15px;
     }
     
     .card {
@@ -764,7 +798,7 @@ tr:hover td {
 
     <div class="content-wrapper">
         <div class="container">
-            <h2><i class="fas fa-book-open"></i> Manage Subjects & Teacher Assignments</h2>
+            <h2><i class="fas fa-book-open"></i> Manage Subjects </h2>
 
             <!-- Alert Messages -->
             <?php if (isset($_SESSION['success_msg'])): ?>
@@ -792,11 +826,11 @@ tr:hover td {
                         <h3><i class="fas fa-plus-circle"></i> Add New Subject</h3>
                         <form method="POST">
                             <div class="input-group">
-                                <label>Subject Name <span class="required">*</span></label>
+                                <label>Subject Name <span class="required"></span></label>
                                 <input type="text" name="subject_name" placeholder="e.g., Mathematics" required>
                             </div>
                             <div class="input-group">
-                                <label>Department <span class="required">*</span></label>
+                                <label>Department <span class="required"></span></label>
                                 <select name="department_id" required>
                                     <option value="">Select Department</option>
                                     <?php 
@@ -820,7 +854,7 @@ tr:hover td {
                         <h3><i class="fas fa-user-graduate"></i> Assign Teacher to Subject</h3>
                         <form method="POST">
                             <div class="input-group">
-                                <label>Select Subject <span class="required">*</span></label>
+                                <label>Select Subject <span class="required"></span></label>
                                 <select name="subject_id" id="assign_subject_select" required onchange="filterTeachersBySubject()">
                                     <option value="">Choose Subject</option>
                                     <?php 
@@ -835,7 +869,7 @@ tr:hover td {
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label>Select Teacher <span class="required">*</span></label>
+                                <label>Select Teacher <span class="required"></span></label>
                                 <select name="teacher_id" id="assign_teacher_select" required>
                                     <option value="">Choose Teacher</option>
                                     <?php foreach($teachers_array as $teacher): ?>
@@ -850,7 +884,7 @@ tr:hover td {
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label>Select Class <span class="required">*</span></label>
+                                <label>Select Class <span class="required"></span></label>
                                 <select name="class_id" required>
                                     <option value="">Choose Class</option>
                                     <?php 
@@ -963,6 +997,11 @@ tr:hover td {
                     </div>
                 </div>
             </div>
+            
+            <!-- Footer Wrapper -->
+            <div class="footer-wrapper">
+                <?php include '../footer.php'; ?>
+            </div>
         </div>
     </div>
 </div>
@@ -977,11 +1016,11 @@ tr:hover td {
         <form method="POST">
             <input type="hidden" name="subject_id" id="edit_subject_id">
             <div class="input-group">
-                <label>Subject Name <span class="required">*</span></label>
+                <label>Subject Name <span class="required"></span></label>
                 <input type="text" name="subject_name" id="edit_subject_name" required>
             </div>
             <div class="input-group">
-                <label>Department <span class="required">*</span></label>
+                <label>Department <span class="required"></span></label>
                 <select name="department_id" id="edit_department_id" required>
                     <?php 
                     mysqli_data_seek($departments, 0);
@@ -1017,7 +1056,7 @@ tr:hover td {
                 </label>
             </div>
             <div class="input-group">
-                <label>Change Teacher <span class="required">*</span></label>
+                <label>Change Teacher <span class="required"></span></label>
                 <select name="teacher_id" id="edit_assignment_teacher_id" required>
                     <option value="">Choose Teacher</option>
                     <!-- Teachers will be populated by JavaScript based on subject department -->
@@ -1148,6 +1187,5 @@ document.querySelector('.mobile-toggle')?.addEventListener('click', function() {
     document.getElementById('sidebar').classList.toggle('active');
 });
 </script>
-
 </body>
 </html>

@@ -43,6 +43,8 @@ $query = mysqli_query($conn, "
     ORDER BY sr.average DESC
 ");
 
+$total_results = mysqli_num_rows($query);
+
 /* ================= STATISTICS QUERY - USING SAME FILTERS ================= */
 $stats_query = "
     SELECT 
@@ -67,8 +69,18 @@ $total = $stat['total_students'] > 0 ? $stat['total_students'] : 1;
 $passed = ($stat['div1'] ?? 0) + ($stat['div2'] ?? 0) + ($stat['div3'] ?? 0);
 $pass_rate = round(($passed / $total) * 100, 2);
 
-// Debug - you can remove this after testing
-// echo "Stats Query: " . $stats_query;
+// Get class name for display
+$class_name = '';
+if (!empty($class_id)) {
+    $class_result = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
+    if ($class_row = mysqli_fetch_assoc($class_result)) {
+        $class_name = $class_row['class_name'];
+    }
+}
+
+// Check if any results exist in the system
+$check_results = mysqli_query($conn, "SELECT COUNT(*) as count FROM student_results");
+$has_any_results = mysqli_fetch_assoc($check_results)['count'] > 0;
 ?>
 
 <!DOCTYPE html>
@@ -91,6 +103,8 @@ $pass_rate = round(($passed / $total) * 100, 2);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f4f6f9;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
         /* ===== MAIN CONTENT ===== */
@@ -98,6 +112,7 @@ $pass_rate = round(($passed / $total) * 100, 2);
             margin-left: 270px;
             margin-top: 75px;
             padding: 25px 30px;
+            flex: 1;
             min-height: calc(100vh - 75px);
         }
 
@@ -230,10 +245,24 @@ $pass_rate = round(($passed / $total) * 100, 2);
 
         .filters .btn-reset {
             background: #94a3b8;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
         }
 
         .filters .btn-reset:hover {
             background: #64748b;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
         }
 
         /* ===== STATISTICS ROW ===== */
@@ -340,14 +369,44 @@ $pass_rate = round(($passed / $total) * 100, 2);
         /* ===== NO DATA ===== */
         .no-data {
             text-align: center;
-            padding: 40px 20px;
+            padding: 60px 20px;
             color: #94a3b8;
         }
 
         .no-data i {
-            font-size: 48px;
+            font-size: 64px;
             display: block;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            color: #cbd5e1;
+        }
+
+        .no-data h3 {
+            font-size: 20px;
+            color: #475569;
+            margin-bottom: 8px;
+        }
+
+        .no-data p {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .no-data .sub-message {
+            margin-top: 15px;
+            padding: 15px 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            display: inline-block;
+            font-size: 13px;
+            color: #64748b;
+            border: 1px dashed #cbd5e1;
+        }
+
+        .no-data .sub-message i {
+            font-size: 16px;
+            display: inline;
+            margin-right: 8px;
+            color: #f59e0b;
         }
 
         /* ===== RESPONSIVE ===== */
@@ -364,7 +423,8 @@ $pass_rate = round(($passed / $total) * 100, 2);
             }
 
             .filters select,
-            .filters button {
+            .filters button,
+            .filters .btn-reset {
                 width: 100%;
             }
 
@@ -416,6 +476,14 @@ $pass_rate = round(($passed / $total) * 100, 2);
             .card-stats .stat-number {
                 font-size: 18px;
             }
+
+            .no-data i {
+                font-size: 48px;
+            }
+
+            .no-data h3 {
+                font-size: 18px;
+            }
         }
 
         /* ===== SCROLLBAR ===== */
@@ -451,6 +519,16 @@ $pass_rate = round(($passed / $total) * 100, 2);
         .last-updated i {
             margin-right: 5px;
         }
+
+        /* ===== ANIMATION ===== */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
     </style>
 </head>
 <body>
@@ -465,16 +543,16 @@ $pass_rate = round(($passed / $total) * 100, 2);
     <div class="main-content">
 
         <!-- Page Title -->
-        <h2 class="page-title">
+        <h2 class="page-title fade-in">
             <i class="fas fa-chart-line"></i>
             School Results
         </h2>
 
         <!-- Results Card -->
-        <div class="card">
+        <div class="card fade-in">
 
             <!-- Filters -->
-            <form method="GET" class="filters">
+            <form method="GET" class="filters" id="filterForm">
                 <select name="term">
                     <option value="">All Terms</option>
                     <option value="Term 1" <?= ($term == 'Term 1') ? 'selected' : '' ?>>Term 1</option>
@@ -514,27 +592,15 @@ $pass_rate = round(($passed / $total) * 100, 2);
                 </button>
 
                 <?php if (!empty($term) || !empty($year) || !empty($class_id)): ?>
-                    <a href="school_results.php" class="filters btn-reset" style="
-                        padding: 10px 16px;
-                        border-radius: 8px;
-                        font-size: 14px;
-                        background: #94a3b8;
-                        color: #ffffff;
-                        text-decoration: none;
-                        font-weight: 600;
-                        transition: all 0.2s;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    ">
+                    <button type="button" class="btn-reset" onclick="resetFilters()">
                         <i class="fas fa-undo"></i> Reset
-                    </a>
+                    </button>
                 <?php endif; ?>
             </form>
 
             <!-- Filter Info -->
             <?php if (!empty($term) || !empty($year) || !empty($class_id)): ?>
-                <div class="filter-info">
+                <div class="filter-info fade-in">
                     <span>
                         <i class="fas fa-filter"></i> 
                         Showing filtered results:
@@ -544,13 +610,8 @@ $pass_rate = round(($passed / $total) * 100, 2);
                         <?php if (!empty($year)): ?>
                             <span class="badge"><?= $year ?></span>
                         <?php endif; ?>
-                        <?php if (!empty($class_id)): ?>
-                            <span class="badge">
-                                <?php 
-                                    $class_name = mysqli_fetch_assoc(mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'"));
-                                    echo $class_name['class_name'] ?? $class_id;
-                                ?>
-                            </span>
+                        <?php if (!empty($class_id) && !empty($class_name)): ?>
+                            <span class="badge"><?= $class_name ?></span>
                         <?php endif; ?>
                     </span>
                     <span>
@@ -559,62 +620,62 @@ $pass_rate = round(($passed / $total) * 100, 2);
                 </div>
             <?php endif; ?>
 
-            <!-- Statistics -->
-            <div class="stats-row">
-                <div class="card-stats primary">
-                    <span class="stat-label"><i class="fas fa-users"></i> Total</span>
-                    <span class="stat-number"><?= $stat['total_students'] ?? 0 ?></span>
+            <?php if ($total_results > 0): ?>
+                <!-- Statistics (Only show if there are results) -->
+                <div class="stats-row">
+                    <div class="card-stats primary">
+                        <span class="stat-label"><i class="fas fa-users"></i> Total</span>
+                        <span class="stat-number"><?= $stat['total_students'] ?? 0 ?></span>
+                    </div>
+                    <div class="card-stats success">
+                        <span class="stat-label"><i class="fas fa-trophy"></i> Division I</span>
+                        <span class="stat-number"><?= $stat['div1'] ?? 0 ?></span>
+                    </div>
+                    <div class="card-stats info">
+                        <span class="stat-label"><i class="fas fa-award"></i> Division II</span>
+                        <span class="stat-number"><?= $stat['div2'] ?? 0 ?></span>
+                    </div>
+                    <div class="card-stats warning">
+                        <span class="stat-label"><i class="fas fa-medal"></i> Division III</span>
+                        <span class="stat-number"><?= $stat['div3'] ?? 0 ?></span>
+                    </div>
+                    <div class="card-stats danger">
+                        <span class="stat-label"><i class="fas fa-exclamation-triangle"></i> Division IV</span>
+                        <span class="stat-number"><?= $stat['div4'] ?? 0 ?></span>
+                    </div>
+                    <div class="card-stats inc">
+                        <span class="stat-label"><i class="fas fa-clock"></i> INC</span>
+                        <span class="stat-number"><?= $stat['inc'] ?? 0 ?></span>
+                    </div>
+                    <div class="card-stats purple">
+                        <span class="stat-label"><i class="fas fa-check-circle"></i> Pass Rate</span>
+                        <span class="stat-number"><?= $pass_rate ?>%</span>
+                    </div>
+                    <div class="card-stats pink">
+                        <span class="stat-label"><i class="fas fa-arrow-up"></i> Avg Score</span>
+                        <span class="stat-number"><?= $stat['overall_average'] ?? 0 ?>%</span>
+                    </div>
                 </div>
-                <div class="card-stats success">
-                    <span class="stat-label"><i class="fas fa-trophy"></i> Division I</span>
-                    <span class="stat-number"><?= $stat['div1'] ?? 0 ?></span>
-                </div>
-                <div class="card-stats info">
-                    <span class="stat-label"><i class="fas fa-award"></i> Division II</span>
-                    <span class="stat-number"><?= $stat['div2'] ?? 0 ?></span>
-                </div>
-                <div class="card-stats warning">
-                    <span class="stat-label"><i class="fas fa-medal"></i> Division III</span>
-                    <span class="stat-number"><?= $stat['div3'] ?? 0 ?></span>
-                </div>
-                <div class="card-stats danger">
-                    <span class="stat-label"><i class="fas fa-exclamation-triangle"></i> Division IV</span>
-                    <span class="stat-number"><?= $stat['div4'] ?? 0 ?></span>
-                </div>
-                <div class="card-stats inc">
-                    <span class="stat-label"><i class="fas fa-clock"></i> INC</span>
-                    <span class="stat-number"><?= $stat['inc'] ?? 0 ?></span>
-                </div>
-                <div class="card-stats purple">
-                    <span class="stat-label"><i class="fas fa-check-circle"></i> Pass Rate</span>
-                    <span class="stat-number"><?= $pass_rate ?>%</span>
-                </div>
-                <div class="card-stats pink">
-                    <span class="stat-label"><i class="fas fa-arrow-up"></i> Avg Score</span>
-                    <span class="stat-number"><?= $stat['overall_average'] ?? 0 ?>%</span>
-                </div>
-            </div>
 
-            <!-- Results Table -->
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Student Name</th>
-                            <th>Class</th>
-                            <th>Term</th>
-                            <th>Year</th>
-                            <th>Total Marks</th>
-                            <th>Points</th>
-                            <th>Average</th>
-                            <th>Division</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php
-                        $no = 1;
-                        if (mysqli_num_rows($query) > 0) {
+                <!-- Results Table -->
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Class</th>
+                                <th>Term</th>
+                                <th>Year</th>
+                                <th>Total Marks</th>
+                                <th>Points</th>
+                                <th>Average</th>
+                                <th>Division</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $no = 1;
                             while ($row = mysqli_fetch_assoc($query)) {
                                 $divisionClass = '';
                                 switch ($row['division']) {
@@ -636,46 +697,123 @@ $pass_rate = round(($passed / $total) * 100, 2);
                                     default:
                                         $divisionClass = 'fail';
                                 }
-                        ?>
-                            <tr>
-                                <td><?= $no++ ?></td>
-                                <td><?= htmlspecialchars($row['full_name']) ?></td>
-                                <td><?= htmlspecialchars($row['class_name']) ?></td>
-                                <td><?= $row['term'] ?></td>
-                                <td><?= $row['academic_year'] ?></td>
-                                <td><?= $row['total_marks'] ?></td>
-                                <td><?= $row['total_points'] ?></td>
-                                <td><?= number_format($row['average'], 2) ?>%</td>
-                                <td class="<?= $divisionClass ?>"><?= $row['division'] ?></td>
-                            </tr>
-                        <?php
-                            }
-                        } else {
-                        ?>
-                            <tr>
-                                <td colspan="9">
-                                    <div class="no-data">
-                                        <i class="fas fa-inbox"></i>
-                                        No results found
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php } ?>
-                    </tbody>
-                </table>
-            </div>
+                            ?>
+                                <tr>
+                                    <td><?= $no++ ?></td>
+                                    <td><?= htmlspecialchars($row['full_name']) ?></td>
+                                    <td><?= htmlspecialchars($row['class_name']) ?></td>
+                                    <td><?= $row['term'] ?></td>
+                                    <td><?= $row['academic_year'] ?></td>
+                                    <td><?= $row['total_marks'] ?></td>
+                                    <td><?= $row['total_points'] ?></td>
+                                    <td><?= number_format($row['average'], 2) ?>%</td>
+                                    <td class="<?= $divisionClass ?>"><?= $row['division'] ?></td>
+                                </tr>
+                            <?php } ?>
+                        </tbody>
+                    </table>
+                </div>
 
-            <!-- Last Updated -->
-            <div class="last-updated">
-                <i class="fas fa-sync-alt"></i>
-                Last updated: <?= date('Y-m-d H:i:s') ?>
-            </div>
+                <!-- Last Updated -->
+                <div class="last-updated">
+                    <i class="fas fa-sync-alt"></i>
+                    Last updated: <?= date('Y-m-d H:i:s') ?>
+                </div>
+
+            <?php else: ?>
+                <!-- No Results Message -->
+                <div class="no-data fade-in">
+                    <i class="fas fa-inbox"></i>
+                    
+                    <?php if (!empty($term) || !empty($year) || !empty($class_id)): ?>
+                        <h3>No Results Found</h3>
+                        <p>No results match your current filter criteria.</p>
+                        <div class="sub-message">
+                            <i class="fas fa-info-circle"></i>
+                            Try adjusting your filters or clear them to see all results.
+                        </div>
+                    <?php elseif (!$has_any_results): ?>
+                        <h3>No Results Available</h3>
+                        <p>There are no student results in the system yet.</p>
+                        <div class="sub-message">
+                            <i class="fas fa-info-circle"></i>
+                            Results will appear here once they have been added and approved by teachers.
+                        </div>
+                    <?php else: ?>
+                        <h3>No Results Available</h3>
+                        <p>There are no student results to display at this time.</p>
+                        <div class="sub-message">
+                            <i class="fas fa-info-circle"></i>
+                            Please check back later or contact the administration.
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
         </div>
     </div>
 
     <!-- ===== FOOTER ===== -->
     <?php include '../footer.php'; ?>
+
+    <script>
+        /**
+         * Reset all filters using JavaScript
+         * This will clear all filter selections and reload the page without parameters
+         */
+        function resetFilters() {
+            // Get all select elements in the form
+            const selects = document.querySelectorAll('#filterForm select');
+            
+            // Reset each select to its first option (the empty/default value)
+            selects.forEach(select => {
+                select.selectedIndex = 0;
+            });
+            
+            // Now submit the form without any filter parameters
+            // The form will submit to the current page with no GET parameters
+            document.getElementById('filterForm').submit();
+        }
+
+        /**
+         * Alternative: Reset filters without reloading the page
+         * This version uses URL manipulation
+         */
+        function resetFiltersWithURL() {
+            // Get the current URL without parameters
+            const currentUrl = window.location.pathname;
+            // Redirect to the base URL without any GET parameters
+            window.location.href = currentUrl;
+        }
+
+        // Add event listener for the reset button if it's a regular link
+        document.addEventListener('DOMContentLoaded', function() {
+            // If there's a reset link, prevent default and use our function
+            const resetLinks = document.querySelectorAll('.btn-reset');
+            resetLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    resetFilters();
+                });
+            });
+        });
+
+        // Auto-hide any status messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert, .notification');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.opacity = '0';
+                    alert.style.transition = 'opacity 0.5s';
+                    setTimeout(() => {
+                        if (alert.parentNode) {
+                            alert.remove();
+                        }
+                    }, 500);
+                }, 5000);
+            });
+        });
+    </script>
 
 </body>
 </html>

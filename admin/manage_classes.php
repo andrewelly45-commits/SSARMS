@@ -560,7 +560,7 @@ $classes = mysqli_query($conn, "SELECT * FROM class ORDER BY class_id DESC");
             <form id="addClassForm">
                 <div class="form-group">
                     <div class="input-wrapper">
-                        <label><i class="fas fa-school"></i> Class Name <span style="color:#ef4444;">*</span></label>
+                        <label><i class="fas fa-school"></i> Class Name </label>
                         <input type="text" name="class_name" id="className" placeholder="e.g., Form 1, Grade 10" required>
                     </div>
                     <div class="input-wrapper">
@@ -568,11 +568,11 @@ $classes = mysqli_query($conn, "SELECT * FROM class ORDER BY class_id DESC");
                         <input type="text" name="stream" id="stream" placeholder="e.g., A, B, Science">
                     </div>
                     <div class="input-wrapper">
-                        <label><i class="fas fa-id-card"></i> Registration Prefix <span style="color:#ef4444;">*</span></label>
+                        <label><i class="fas fa-id-card"></i> Registration Prefix </label>
                         <input type="text" name="reg_prefix" id="regPrefix" maxlength="2" placeholder="11" required>
                    </div>
                    <div class="input-wrapper">
-                       <label><i class="fas fa-layer-group"></i> Level <span style="color:#ef4444;">*</span></label>
+                       <label><i class="fas fa-layer-group"></i> Level </label>
                        <select name="level" id="level" required>
                            <option value="">Select Level</option>
                            <option value="1">Form One</option>
