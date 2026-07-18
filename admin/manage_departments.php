@@ -187,6 +187,7 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
             font-size: 13px;
             transition: all 0.3s;
             border: none;
+            cursor: pointer;
         }
 
         .btn-danger:hover {
@@ -204,12 +205,29 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
             display: inline-block;
             font-size: 13px;
             transition: all 0.3s;
+            border: none;
+            cursor: pointer;
         }
 
         .btn-edit:hover {
             background: #1d4ed8;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-cancel {
+            background: #64748b;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .btn-cancel:hover {
+            background: #475569;
         }
 
         .alert {
@@ -289,6 +307,179 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
             color: #64748b;
         }
 
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+            animation: slideDown 0.3s;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .modal-header h3 {
+            color: #1a2332;
+            font-size: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #64748b;
+            transition: color 0.3s;
+        }
+
+        .modal-close:hover {
+            color: #1a2332;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-body label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #1a2332;
+        }
+
+        .modal-body input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .modal-body input:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Delete Modal specific */
+        .delete-icon {
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .delete-modal-body {
+            text-align: center;
+        }
+
+        .delete-modal-body p {
+            color: #64748b;
+            margin-bottom: 5px;
+        }
+
+        .delete-modal-body .department-name {
+            font-weight: 600;
+            color: #1a2332;
+            font-size: 18px;
+        }
+
+        .btn-danger-modal {
+            background: #dc2626;
+            color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-danger-modal:hover {
+            background: #b91c1c;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            animation: slideInRight 0.5s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .toast-success {
+            background: #16a34a;
+        }
+
+        .toast-error {
+            background: #dc2626;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
         /* Responsive Design */
         @media (max-width: 1024px) {
             .main-content {
@@ -330,9 +521,14 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
                 gap: 5px;
             }
 
-            .btn-edit, .btn-danger {
+            .btn-edit, .btn-danger, .btn-cancel {
                 text-align: center;
                 width: 100%;
+            }
+
+            .modal-content {
+                margin: 20% auto;
+                padding: 20px;
             }
         }
 
@@ -369,24 +565,25 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
             </div>
 
             <?php if(isset($_SESSION['success'])): ?>
-                <div class="alert alert-success">
+                <div class="alert alert-success" id="successAlert">
                     <?= $_SESSION['success'] ?>
                 </div>
                 <?php unset($_SESSION['success']); ?>
             <?php endif; ?>
 
             <?php if(isset($_SESSION['error'])): ?>
-                <div class="alert alert-error">
+                <div class="alert alert-error" id="errorAlert">
                     <?= $_SESSION['error'] ?>
                 </div>
                 <?php unset($_SESSION['error']); ?>
             <?php endif; ?>
 
             <div class="add-department-form">
-                <form method="POST">
+                <form method="POST" id="addDepartmentForm">
                     <input 
                         type="text"
                         name="department_name"
+                        id="department_name"
                         placeholder="Enter department name..."
                         required
                     >
@@ -401,7 +598,7 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
                     <table>
                         <thead>
                             <tr>
-                                <th>#</th>
+                                <th>No</th>
                                 <th>Department Name</th>
                                 <th>Actions</th>
                             </tr>
@@ -411,22 +608,19 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
                             $i = 1;
                             while($row = mysqli_fetch_assoc($departments)): 
                             ?>
-                            <tr>
+                            <tr id="row-<?= $row['department_id'] ?>">
                                 <td><?= $i++ ?></td>
                                 <td>
                                     <strong><?= htmlspecialchars($row['department_name']) ?></strong>
                                 </td>
                                 <td>
                                     <div class="action-buttons">
-                                        <a href="edit_department.php?id=<?= $row['department_id'] ?>" 
-                                           class="btn-edit">
+                                        <button class="btn-edit" onclick="openEditModal(<?= $row['department_id'] ?>, '<?= htmlspecialchars($row['department_name']) ?>')">
                                             Edit
-                                        </a>
-                                        <a class="btn-danger"
-                                           onclick="return confirm('Are you sure you want to delete this department? This action cannot be undone.')"
-                                           href="?delete=<?= $row['department_id'] ?>">
+                                        </button>
+                                        <button class="btn-danger" onclick="openDeleteModal(<?= $row['department_id'] ?>, '<?= htmlspecialchars($row['department_name']) ?>')">
                                             Delete
-                                        </a>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -444,6 +638,199 @@ $departments=mysqli_query($conn, "SELECT * FROM department ORDER BY department_n
         </div>
     </div>
 </div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Department</h3>
+            <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
+        <form method="POST" id="editForm">
+            <input type="hidden" name="department_id" id="edit_department_id">
+            <div class="modal-body">
+                <label for="edit_department_name">Department Name</label>
+                <input 
+                    type="text" 
+                    name="department_name" 
+                    id="edit_department_name" 
+                    required
+                >
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeModal('editModal')">Cancel</button>
+                <button type="submit" name="update_department" class="btn btn-success">Update Department</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="deleteModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Confirm Delete</h3>
+            <button class="modal-close" onclick="closeModal('deleteModal')">&times;</button>
+        </div>
+        <div class="delete-modal-body">
+            <div class="delete-icon"></div>
+            <p>Are you sure you want to delete the department:</p>
+            <p class="department-name" id="delete_department_name"></p>
+            <p style="margin-top: 10px; color: #991b1b; font-size: 13px;">This action cannot be undone!</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-cancel" onclick="closeModal('deleteModal')">Cancel</button>
+            <a href="#" id="deleteConfirmLink" class="btn-danger-modal">Delete Department</a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-hide alerts after 5 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    
+    if (successAlert) {
+        setTimeout(() => {
+            successAlert.style.transition = 'opacity 0.5s';
+            successAlert.style.opacity = '0';
+            setTimeout(() => successAlert.remove(), 500);
+        }, 5000);
+    }
+    
+    if (errorAlert) {
+        setTimeout(() => {
+            errorAlert.style.transition = 'opacity 0.5s';
+            errorAlert.style.opacity = '0';
+            setTimeout(() => errorAlert.remove(), 500);
+        }, 5000);
+    }
+});
+
+// Open Edit Modal
+function openEditModal(id, name) {
+    document.getElementById('edit_department_id').value = id;
+    document.getElementById('edit_department_name').value = name;
+    document.getElementById('editModal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    // Focus the input after a small delay
+    setTimeout(() => {
+        document.getElementById('edit_department_name').focus();
+        document.getElementById('edit_department_name').select();
+    }, 100);
+}
+
+// Open Delete Modal
+function openDeleteModal(id, name) {
+    document.getElementById('delete_department_name').textContent = `"${name}"`;
+    document.getElementById('deleteConfirmLink').href = `?delete=${id}`;
+    document.getElementById('deleteModal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// Close Modal
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const editModal = document.getElementById('editModal');
+    const deleteModal = document.getElementById('deleteModal');
+    
+    if (event.target === editModal) {
+        closeModal('editModal');
+    }
+    if (event.target === deleteModal) {
+        closeModal('deleteModal');
+    }
+}
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const editModal = document.getElementById('editModal');
+        const deleteModal = document.getElementById('deleteModal');
+        
+        if (editModal.style.display === 'block') {
+            closeModal('editModal');
+        }
+        if (deleteModal.style.display === 'block') {
+            closeModal('deleteModal');
+        }
+    }
+});
+
+// Form validation for add department
+document.getElementById('addDepartmentForm').addEventListener('submit', function(e) {
+    const input = document.getElementById('department_name');
+    const value = input.value.trim();
+    
+    if (value === '') {
+        e.preventDefault();
+        input.style.borderColor = '#dc2626';
+        showToast('Please enter a department name.', 'error');
+        return false;
+    }
+    
+    if (value.length < 2) {
+        e.preventDefault();
+        input.style.borderColor = '#dc2626';
+        showToast('Department name must be at least 2 characters long.', 'error');
+        return false;
+    }
+});
+
+// Form validation for edit department
+document.getElementById('editForm').addEventListener('submit', function(e) {
+    const input = document.getElementById('edit_department_name');
+    const value = input.value.trim();
+    
+    if (value === '') {
+        e.preventDefault();
+        input.style.borderColor = '#dc2626';
+        showToast('Please enter a department name.', 'error');
+        return false;
+    }
+    
+    if (value.length < 2) {
+        e.preventDefault();
+        input.style.borderColor = '#dc2626';
+        showToast('Department name must be at least 2 characters long.', 'error');
+        return false;
+    }
+});
+
+// Show toast notification
+function showToast(message, type = 'success') {
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.5s, transform 0.5s';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100px)';
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
+}
+
+// Remove border color on input focus
+document.querySelectorAll('input').forEach(input => {
+    input.addEventListener('focus', function() {
+        this.style.borderColor = '#2563eb';
+    });
+});
+</script>
 
 <?php include '../footer.php'; ?>
 </body>

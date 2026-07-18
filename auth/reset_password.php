@@ -177,7 +177,7 @@ if (isset($_POST['update'])) {
 
     <?php if ($message_type == "success"): ?>
         <div class="login-link">
-            <a href="login.php">🔑 Go to Login</a>
+            <a href="login.php"> Go to Login</a>
         </div>
     <?php endif; ?>
 
