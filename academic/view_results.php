@@ -2,18 +2,98 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 /* ================= AUTH CHECK ================= */
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'academic') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'results', "Unauthorized access attempt to school results by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG SCHOOL RESULTS VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'results', "Academic staff viewed school results page", 'success', null, 'results');
 }
 
 $term = $_GET['term'] ?? '';
 $year = $_GET['year'] ?? '';
 $class_id = $_GET['class_id'] ?? '';
+
+// Build filter description for logging
+$filter_description = [];
+if (!empty($term)) $filter_description[] = "Term: $term";
+if (!empty($year)) $filter_description[] = "Year: $year";
+if (!empty($class_id)) {
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
+    $class_row = mysqli_fetch_assoc($class_query);
+    $class_name = $class_row['class_name'] ?? 'Unknown Class';
+    $filter_description[] = "Class: $class_name";
+}
+
+// Log the filter applied
+if (!empty($filter_description)) {
+    if (function_exists('logAction')) {
+        logAction('view', 'results', "Academic staff filtered school results: " . implode(', ', $filter_description), 'success', !empty($class_id) ? $class_id : null, 'results');
+    }
+}
 
 $where = "WHERE 1=1";
 
@@ -81,6 +161,17 @@ if (!empty($class_id)) {
 // Check if any results exist in the system
 $check_results = mysqli_query($conn, "SELECT COUNT(*) as count FROM student_results");
 $has_any_results = mysqli_fetch_assoc($check_results)['count'] > 0;
+
+// Log if no results found
+if ($total_results == 0) {
+    if (function_exists('logAction')) {
+        $log_msg = "No results found";
+        if (!empty($filter_description)) {
+            $log_msg .= " for filters: " . implode(', ', $filter_description);
+        }
+        logAction('view', 'results', $log_msg, 'info', !empty($class_id) ? $class_id : null, 'results');
+    }
+}
 ?>
 
 <!DOCTYPE html>

@@ -2,9 +2,71 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'students', "Unauthorized access attempt to manage students by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG MANAGE STUDENTS PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'students', "Admin viewed manage students page", 'success', null, 'students');
 }
 
 error_reporting(E_ALL);
@@ -14,6 +76,9 @@ ini_set('display_errors', 1);
 $result = mysqli_query($conn, "SELECT school_code FROM school_settings LIMIT 1");
 if(mysqli_num_rows($result) == 0) {
     $_SESSION['error_msg'] = "Please configure School Settings before registering students.";
+    if (function_exists('logAction')) {
+        logAction('error', 'students', "School settings not configured for student registration", 'failed');
+    }
     header("Location: school_settings.php");
     exit();
 }
@@ -76,6 +141,9 @@ if(isset($_POST['add_student'])) {
     $check_email = mysqli_query($conn, "SELECT user_id FROM users WHERE email='$email'");
     if(mysqli_num_rows($check_email) > 0) {
         $_SESSION['error_msg'] = "Email already exists!";
+        if (function_exists('logAction')) {
+            logAction('error', 'students', "Failed to add student: Email already exists - $email", 'failed');
+        }
     } else {
         $insert_user = mysqli_query($conn, "INSERT INTO users (full_name, email, password, role, phone, gender) VALUES ('$name', '$email', '$password', 'student', '$phone', '$gender')");
         if($insert_user) {
@@ -85,11 +153,39 @@ if(isset($_POST['add_student'])) {
             $insert_student = mysqli_query($conn, "INSERT INTO student (user_id, registration_no, class_id, date_of_birth, academic_year, admission_no) VALUES ('$user_id', '$registration_no', '$class_id', '$dob', '$academic_year', '$admission_no')");
             if($insert_student) {
                 $_SESSION['success_msg'] = "Student added successfully! Admission No: ".$admission_no;
+                
+                // Log successful student addition
+                if (function_exists('logAction')) {
+                    $student_data = [
+                        'name' => $name,
+                        'email' => $email,
+                        'class_id' => $class_id,
+                        'admission_no' => $admission_no,
+                        'registration_no' => $registration_no,
+                        'dob' => $dob
+                    ];
+                    logAction(
+                        'add', 
+                        'students', 
+                        "Added new student: $name (Admission: $admission_no, Reg: $registration_no)", 
+                        'success', 
+                        mysqli_insert_id($conn), 
+                        'students',
+                        null,
+                        $student_data
+                    );
+                }
             } else {
                 $_SESSION['error_msg'] = mysqli_error($conn);
+                if (function_exists('logAction')) {
+                    logAction('error', 'students', "Failed to add student: " . mysqli_error($conn), 'failed');
+                }
             }
         } else {
             $_SESSION['error_msg'] = "Failed to create user!";
+            if (function_exists('logAction')) {
+                logAction('error', 'students', "Failed to create user for student: $name", 'failed');
+            }
         }
     }
     header("Location: manage_students.php");
@@ -106,6 +202,16 @@ if(isset($_POST['edit_student'])) {
     $phone = $_POST['phone'];
     $gender = $_POST['gender'];
 
+    // Get old data for audit
+    $old_query = mysqli_query($conn, "
+        SELECT s.*, u.full_name, u.email, u.phone, u.gender, c.class_name 
+        FROM student s
+        JOIN users u ON s.user_id = u.user_id
+        JOIN class c ON s.class_id = c.class_id
+        WHERE s.student_id='$student_id'
+    ");
+    $old_data = mysqli_fetch_assoc($old_query);
+    
     $get = mysqli_query($conn, "SELECT user_id FROM student WHERE student_id='$student_id'");
     $user = mysqli_fetch_assoc($get);
     $user_id = $user['user_id'];
@@ -113,10 +219,35 @@ if(isset($_POST['edit_student'])) {
     $check = mysqli_query($conn, "SELECT user_id FROM users WHERE email='$email' AND user_id!='$user_id'");
     if(mysqli_num_rows($check) > 0) {
         $_SESSION['error_msg'] = "Email already exists!";
+        if (function_exists('logAction')) {
+            logAction('error', 'students', "Failed to update student $name: Email already exists - $email", 'failed', $student_id, 'students');
+        }
     } else {
         mysqli_query($conn, "UPDATE users SET full_name='$name', email='$email', phone='$phone', gender='$gender' WHERE user_id='$user_id'");
         mysqli_query($conn, "UPDATE student SET class_id='$class_id', date_of_birth='$dob' WHERE student_id='$student_id'");
         $_SESSION['success_msg'] = "Student updated successfully!";
+        
+        // Log successful update
+        if (function_exists('logAction')) {
+            $new_data = [
+                'name' => $name,
+                'email' => $email,
+                'class_id' => $class_id,
+                'dob' => $dob,
+                'phone' => $phone,
+                'gender' => $gender
+            ];
+            logAction(
+                'edit', 
+                'students', 
+                "Updated student: $name (ID: $student_id)", 
+                'success', 
+                $student_id, 
+                'students',
+                $old_data,
+                $new_data
+            );
+        }
     }
     header("Location: manage_students.php");
     exit();
@@ -128,17 +259,96 @@ if(isset($_GET['suspend']) || isset($_GET['activate'])) {
     $student_id = (int)$_GET[$action];
     $status = $action == 'suspend' ? 'suspended' : 'active';
     $msg = $action == 'suspend' ? 'suspended' : 'activated';
+    
+    // Get student info for logging
+    $student_query = mysqli_query($conn, "
+        SELECT s.*, u.full_name, u.email 
+        FROM student s 
+        JOIN users u ON s.user_id = u.user_id 
+        WHERE s.student_id='$student_id'
+    ");
+    $student_info = mysqli_fetch_assoc($student_query);
+    
     $get_user = mysqli_query($conn, "SELECT user_id FROM student WHERE student_id='$student_id'");
     if($user = mysqli_fetch_assoc($get_user)) {
         mysqli_query($conn, "UPDATE users SET status='$status' WHERE user_id='{$user['user_id']}'");
         $_SESSION['success_msg'] = "Student $msg successfully!";
+        
+        // Log suspend/activate
+        if (function_exists('logAction')) {
+            logAction(
+                $action == 'suspend' ? 'suspend' : 'activate', 
+                'students', 
+                ucfirst($action) . "d student: " . ($student_info['full_name'] ?? 'Unknown') . " (ID: $student_id)", 
+                'success', 
+                $student_id, 
+                'students',
+                ['status' => $action == 'suspend' ? 'active' : 'suspended'],
+                ['status' => $action == 'suspend' ? 'suspended' : 'active']
+            );
+        }
     }
+    header("Location: manage_students.php");
+    exit();
+}
+
+// DELETE STUDENT
+if(isset($_GET['delete'])) {
+    $student_id = (int)$_GET['delete'];
+    
+    // Get student info for logging
+    $student_query = mysqli_query($conn, "
+        SELECT s.*, u.full_name, u.email, u.user_id
+        FROM student s 
+        JOIN users u ON s.user_id = u.user_id 
+        WHERE s.student_id='$student_id'
+    ");
+    $student_info = mysqli_fetch_assoc($student_query);
+    
+    if ($student_info) {
+        $user_id = $student_info['user_id'];
+        $name = $student_info['full_name'];
+        
+        // Delete student record
+        $delete_student = mysqli_query($conn, "DELETE FROM student WHERE student_id='$student_id'");
+        if ($delete_student) {
+            // Delete user record
+            mysqli_query($conn, "DELETE FROM users WHERE user_id='$user_id'");
+            
+            $_SESSION['success_msg'] = "Student deleted successfully!";
+            
+            // Log deletion
+            if (function_exists('logAction')) {
+                logAction(
+                    'delete', 
+                    'students', 
+                    "Deleted student: $name (ID: $student_id, Email: {$student_info['email']})", 
+                    'success', 
+                    $student_id, 
+                    'students',
+                    $student_info,
+                    null
+                );
+            }
+        } else {
+            $_SESSION['error_msg'] = "Failed to delete student!";
+            if (function_exists('logAction')) {
+                logAction('error', 'students', "Failed to delete student: $name (ID: $student_id)", 'failed', $student_id, 'students');
+            }
+        }
+    }
+    
     header("Location: manage_students.php");
     exit();
 }
 
 //  SEARCH 
 $search = isset($_GET['search']) ? trim(mysqli_real_escape_string($conn, $_GET['search'])) : '';
+
+// Log search if performed
+if (!empty($search) && function_exists('logAction')) {
+    logAction('search', 'students', "Admin searched students with keyword: $search", 'success', null, 'students');
+}
 
 $query = "SELECT s.student_id, s.user_id, s.registration_no, s.admission_no, u.full_name, u.email, u.phone, u.gender, u.status, c.class_id, c.class_name, s.academic_year, s.date_of_birth
 FROM student s

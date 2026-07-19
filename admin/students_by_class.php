@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../db.php';
+include '../auth/audit_logger.php';
 
 if (!isset($_GET['class_id'])) {
     die("Class not specified");

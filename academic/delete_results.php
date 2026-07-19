@@ -1,14 +1,73 @@
 <?php
 session_start();
 include("../db.php");
-include("../auth/audit_functions.php");
+
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
 
 /* ==========================================
    ACADEMIC AUTHENTICATION
 ========================================== */
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'academic') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'marks', "Unauthorized access attempt to delete results by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG DELETE RESULTS PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'marks', "Academic staff viewed delete results page", 'success', null, 'marks');
 }
 
 $user_id = $_SESSION['user_id'];
@@ -22,6 +81,9 @@ $user = mysqli_fetch_assoc(
 );
 
 if (!$user) {
+    if (function_exists('logAction')) {
+        logAction('error', 'marks', "Academic user not found for user_id: $user_id", 'failed');
+    }
     die("Academic user not found.");
 }
 
@@ -33,30 +95,68 @@ if (isset($_POST['delete_results'])) {
     $term          = mysqli_real_escape_string($conn, $_POST['term']);
     $password      = $_POST['password'];
 
+    // Log delete attempt
+    if (function_exists('logAction')) {
+        logAction('delete', 'marks', "Attempting to delete all $term results for year $academic_year", 'pending', null, 'marks');
+    }
+
     /* Only current year can be deleted */
     if ($academic_year != $current_year) {
         $_SESSION['error_message'] = "Only current academic year results can be deleted.";
+        
+        if (function_exists('logAction')) {
+            logAction('error', 'marks', "Delete failed: Only current year ($current_year) can be deleted. Attempted year: $academic_year", 'failed', null, 'marks');
+        }
     } elseif (empty($term)) {
         $_SESSION['error_message'] = "Please select the term.";
+        
+        if (function_exists('logAction')) {
+            logAction('error', 'marks', "Delete failed: No term selected", 'failed', null, 'marks');
+        }
     } elseif (!password_verify($password, $user['password'])) {
         $_SESSION['error_message'] = "Incorrect password.";
+        
+        if (function_exists('logAction')) {
+            logAction('error', 'marks', "Delete failed: Incorrect password for user: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed', null, 'marks');
+        }
     } else {
         mysqli_begin_transaction($conn);
 
         try {
-            /* Count rows first */
-            $count = mysqli_fetch_assoc(
-                mysqli_query(
-                    $conn,
-                    "SELECT COUNT(*) total
-                     FROM marks
-                     WHERE academic_year='$academic_year'
-                     AND term='$term'"
-                )
+            // Count rows first - get all marks to be deleted for audit
+            $count_query = mysqli_query(
+                $conn,
+                "SELECT COUNT(*) total,
+                        COUNT(DISTINCT student_id) as total_students,
+                        COUNT(DISTINCT class_id) as total_classes,
+                        COUNT(DISTINCT subject_id) as total_subjects
+                 FROM marks
+                 WHERE academic_year='$academic_year'
+                 AND term='$term'"
             );
+            $stats = mysqli_fetch_assoc($count_query);
+            $deleted = $stats['total'] ?? 0;
+            
+            // Get detailed info for logging
+            $classes_query = mysqli_query($conn,
+                "SELECT DISTINCT class_id FROM marks WHERE academic_year='$academic_year' AND term='$term'"
+            );
+            $class_ids = [];
+            while ($row = mysqli_fetch_assoc($classes_query)) {
+                $class_ids[] = $row['class_id'];
+            }
+            
+            // Get class names
+            $class_names = [];
+            if (!empty($class_ids)) {
+                $ids = implode(',', $class_ids);
+                $class_names_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id IN ($ids)");
+                while ($row = mysqli_fetch_assoc($class_names_query)) {
+                    $class_names[] = $row['class_name'];
+                }
+            }
 
-            $deleted = $count['total'];
-
+            // Perform deletion
             mysqli_query(
                 $conn,
                 "DELETE FROM marks
@@ -64,29 +164,42 @@ if (isset($_POST['delete_results'])) {
                  AND term='$term'"
             );
 
-            logSystemAction(
-                $_SESSION['user_id'],
-                $_SESSION['role'],
-                $_SESSION['full_name'],
-                'delete',
-                "Deleted all results for $academic_year ($term)",
-                'marks',
-                'marks',
-                null,
-                [
+            // Log successful deletion
+            if (function_exists('logAction')) {
+                $log_data = [
                     'academic_year' => $academic_year,
                     'term' => $term,
-                    'records_deleted' => $deleted
-                ],
-                null
-            );
+                    'records_deleted' => $deleted,
+                    'total_students' => $stats['total_students'] ?? 0,
+                    'total_classes' => $stats['total_classes'] ?? 0,
+                    'total_subjects' => $stats['total_subjects'] ?? 0,
+                    'classes_affected' => implode(', ', $class_names)
+                ];
+                
+                logAction(
+                    'delete', 
+                    'marks', 
+                    "Successfully deleted $deleted records for $term $academic_year. Affected " . ($stats['total_classes'] ?? 0) . " classes: " . implode(', ', $class_names), 
+                    'success', 
+                    null, 
+                    'marks',
+                    null,
+                    $log_data
+                );
+            }
 
             mysqli_commit($conn);
 
-            $_SESSION['success_message'] = "$deleted result(s) deleted successfully.";
+            $_SESSION['success_message'] = "$deleted result(s) deleted successfully for $term $academic_year.";
+            
         } catch (Exception $e) {
             mysqli_rollback($conn);
-            $_SESSION['error_message'] = "Deletion failed.";
+            
+            if (function_exists('logAction')) {
+                logAction('error', 'marks', "Delete failed: " . $e->getMessage(), 'failed', null, 'marks');
+            }
+            
+            $_SESSION['error_message'] = "Deletion failed: " . $e->getMessage();
         }
     }
 }

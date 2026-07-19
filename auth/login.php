@@ -2,6 +2,45 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// FIX: Include audit logger with correct path
+// ============================================
+// Try multiple paths to find the file
+$audit_paths = [
+    '../audit_logger.php',      // From auth/ go up to root
+    'audit_logger.php',          // If in same folder
+    '../includes/audit_logger.php',
+    '../auth/audit_logger.php',
+    '../../audit_logger.php'
+];
+
+$audit_loaded = false;
+foreach ($audit_paths as $path) {
+    if (file_exists($path)) {
+        include $path;
+        $audit_loaded = true;
+        error_log("Audit logger loaded from: $path");
+        break;
+    }
+}
+
+if (!$audit_loaded) {
+    error_log("WARNING: Audit logger not found in any path");
+    // Define a fallback function so the page doesn't crash
+    if (!function_exists('logAction')) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            // Fallback - just log to error log
+            error_log("AUDIT: [$action_type] [$module] $description");
+            return true;
+        }
+    }
+}
+
+// Check if function exists
+if (!function_exists('logAction')) {
+    error_log("ERROR: logAction function not defined after including audit_logger.php");
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -16,6 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (empty($email) || empty($password)) {
         $error = "Please fill all fields!";
+        // Log failed login attempt - missing fields
+        if (function_exists('logAction')) {
+            logAction('login', 'auth', "Login failed: Missing email or password", 'failed');
+        }
     } else {
 
         $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
@@ -31,26 +74,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Check account status
                 if (isset($row['status']) && $row['status'] == 'suspended') {
                     $error = "Your account has been suspended. Please contact the administrator.";
+                    // Log suspended account attempt
+                    if (function_exists('logAction')) {
+                        logAction('login', 'auth', "Login failed: Account suspended for user: " . $row['full_name'] . " (Email: $email)", 'failed');
+                    }
                 } else {
 
                     // Create session
                     $_SESSION['user_id'] = $row['user_id'];
                     $_SESSION['role'] = $row['role'];
                     $_SESSION['full_name'] = $row['full_name'];
-
-                    // ===== LOG THE LOGIN ACTION =====
-                    include 'audit_functions.php';
+                    $_SESSION['email'] = $row['email'];
                     
-                    logSystemAction(
-                        $row['user_id'],      // Use the fetched user ID
-                        $row['role'],          // Use the fetched role
-                        $row['full_name'],     // Use the fetched full name
-                        'login',
-                        "User logged in successfully",
-                        'auth',
-                        'users',
-                        $row['user_id']
-                    );
+                    // LOG SUCCESSFUL LOGIN
+                    if (function_exists('logAction')) {
+                        logAction('login', 'auth', "User logged in: " . $row['full_name'] . " (Role: " . $row['role'] . ", Email: $email)", 'success', $row['user_id'], 'users');
+                    }
 
                     // Redirect based on role
                     if ($row['role'] == 'admin') {
@@ -70,10 +109,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             } else {
                 $error = "Wrong password!";
+                // Log failed login - wrong password
+                if (function_exists('logAction')) {
+                    logAction('login', 'auth', "Login failed: Wrong password for user: " . $row['full_name'] . " (Email: $email)", 'failed');
+                }
             }
 
         } else {
             $error = "User not found!";
+            // Log failed login - user not found
+            if (function_exists('logAction')) {
+                logAction('login', 'auth', "Login failed: User not found with email: $email", 'failed');
+            }
         }
 
         $stmt->close();
@@ -235,8 +282,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
 
-        /* ========== ICON-ONLY CSS ========== */
-        /* Makes icons display inline with label text properly */
         .input-group label {
             display: flex;
             align-items: center;
@@ -252,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <body>
 <div class="login-container">
     <div class="logo-wrapper">
-        <img src="../images/tyler.jpg">
+        <img src="../images/tyler.jpg" alt="SSARMS Logo">
     </div>
     <h2>SSARMS</h2>
     <div class="subhead">Academic Record System</div>

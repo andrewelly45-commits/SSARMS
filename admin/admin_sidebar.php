@@ -246,7 +246,7 @@ body {
     }
 }
 
-/* ========== GLOBAL BUTTON STYLES (for consistency) ========== */
+/*  GLOBAL BUTTON STYLES (for consistency) */
 .btn-primary {
     background: #f59e0b;
     color: white;
@@ -463,6 +463,8 @@ document.addEventListener('DOMContentLoaded', function() {
         <a href="assign_class_subjects.php"><i class="fas fa-book"></i> Assign Class Subjects</a>
         <a href="manage_departments.php"><i class="fas fa-school"></i> Manage Departments</a>
         <a href="system_history.php"><i class="fas fa-history"></i> System History</a>
+         <a href="system_settings.php"><i class="fas fa-cogs"></i> System Settings</a>
+         <a href="system_backup.php"><i class="fas fa-database"></i> System Backup</a>
     </div>
 
 </div>

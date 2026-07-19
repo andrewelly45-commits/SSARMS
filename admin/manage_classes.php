@@ -2,31 +2,111 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
 
 // CHECK ADMIN
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'classes', "Unauthorized access attempt to manage classes by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
 }
 
-
+// ============================================
+// LOG MANAGE CLASSES PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'classes', "Admin viewed manage classes page", 'success', null, 'classes');
+}
 
 // ================= HANDLE AJAX & FORM REQUESTS =================
 // ADD CLASS (AJAX or normal POST)
 if (isset($_POST['add_class'])) {
-   $class_name = mysqli_real_escape_string($conn, $_POST['class_name']);
-   $stream = mysqli_real_escape_string($conn, $_POST['stream']);
-   $reg_prefix = mysqli_real_escape_string($conn, $_POST['reg_prefix']);
-   $level = intval($_POST['level']);
+    $class_name = mysqli_real_escape_string($conn, $_POST['class_name']);
+    $stream = mysqli_real_escape_string($conn, $_POST['stream']);
+    $reg_prefix = mysqli_real_escape_string($conn, $_POST['reg_prefix']);
+    $level = intval($_POST['level']);
 
-   $result = mysqli_query($conn, "INSERT INTO class
-   (class_name, stream, reg_prefix, level)
-   VALUES ('$class_name','$stream','$reg_prefix','$level')");
+    $result = mysqli_query($conn, "INSERT INTO class
+    (class_name, stream, reg_prefix, level)
+    VALUES ('$class_name','$stream','$reg_prefix','$level')");
 
     // If AJAX request, return JSON response
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         if ($result) {
             $new_id = mysqli_insert_id($conn);
+            
+            // Log class addition (AJAX)
+            if (function_exists('logAction')) {
+                $class_data = [
+                    'class_name' => $class_name,
+                    'stream' => $stream,
+                    'reg_prefix' => $reg_prefix,
+                    'level' => $level
+                ];
+                logAction(
+                    'add', 
+                    'classes', 
+                    "Added new class: $class_name (Level: $level, Stream: $stream)", 
+                    'success', 
+                    $new_id, 
+                    'classes',
+                    null,
+                    $class_data
+                );
+            }
+            
             echo json_encode([
                 'success' => true, 
                 'class_id' => $new_id, 
@@ -36,8 +116,43 @@ if (isset($_POST['add_class'])) {
                 'level' => $level
             ]);
         } else {
+            if (function_exists('logAction')) {
+                logAction('error', 'classes', "Failed to add class: $class_name - Database error", 'failed');
+            }
             echo json_encode(['success' => false, 'error' => 'Database error']);
         }
+        exit();
+    } else {
+        // Non-AJAX POST
+        if ($result) {
+            $_SESSION['success_msg'] = "Class '$class_name' added successfully!";
+            
+            // Log class addition (non-AJAX)
+            if (function_exists('logAction')) {
+                $class_data = [
+                    'class_name' => $class_name,
+                    'stream' => $stream,
+                    'reg_prefix' => $reg_prefix,
+                    'level' => $level
+                ];
+                logAction(
+                    'add', 
+                    'classes', 
+                    "Added new class: $class_name (Level: $level, Stream: $stream)", 
+                    'success', 
+                    mysqli_insert_id($conn), 
+                    'classes',
+                    null,
+                    $class_data
+                );
+            }
+        } else {
+            $_SESSION['error_msg'] = "Failed to add class!";
+            if (function_exists('logAction')) {
+                logAction('error', 'classes', "Failed to add class: $class_name - Database error", 'failed');
+            }
+        }
+        header("Location: manage_classes.php");
         exit();
     }
 }
@@ -50,6 +165,10 @@ if (isset($_POST['edit_class'])) {
     $reg_prefix = mysqli_real_escape_string($conn, $_POST['reg_prefix']);
     $level = intval($_POST['level']);
 
+    // Get old data for audit
+    $old_query = mysqli_query($conn, "SELECT * FROM class WHERE class_id = '$class_id'");
+    $old_data = mysqli_fetch_assoc($old_query);
+
     $result = mysqli_query($conn, "UPDATE class SET 
         class_name = '$class_name',
         stream = '$stream',
@@ -59,6 +178,26 @@ if (isset($_POST['edit_class'])) {
 
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         if ($result) {
+            // Log class update (AJAX)
+            if (function_exists('logAction')) {
+                $new_data = [
+                    'class_name' => $class_name,
+                    'stream' => $stream,
+                    'reg_prefix' => $reg_prefix,
+                    'level' => $level
+                ];
+                logAction(
+                    'edit', 
+                    'classes', 
+                    "Updated class: $class_name (ID: $class_id)", 
+                    'success', 
+                    $class_id, 
+                    'classes',
+                    $old_data,
+                    $new_data
+                );
+            }
+            
             echo json_encode([
                 'success' => true,
                 'class_id' => $class_id,
@@ -68,8 +207,43 @@ if (isset($_POST['edit_class'])) {
                 'level' => $level
             ]);
         } else {
+            if (function_exists('logAction')) {
+                logAction('error', 'classes', "Failed to update class: $class_name - Database error", 'failed', $class_id, 'classes');
+            }
             echo json_encode(['success' => false, 'error' => 'Database error']);
         }
+        exit();
+    } else {
+        // Non-AJAX POST
+        if ($result) {
+            $_SESSION['success_msg'] = "Class '$class_name' updated successfully!";
+            
+            // Log class update (non-AJAX)
+            if (function_exists('logAction')) {
+                $new_data = [
+                    'class_name' => $class_name,
+                    'stream' => $stream,
+                    'reg_prefix' => $reg_prefix,
+                    'level' => $level
+                ];
+                logAction(
+                    'edit', 
+                    'classes', 
+                    "Updated class: $class_name (ID: $class_id)", 
+                    'success', 
+                    $class_id, 
+                    'classes',
+                    $old_data,
+                    $new_data
+                );
+            }
+        } else {
+            $_SESSION['error_msg'] = "Failed to update class!";
+            if (function_exists('logAction')) {
+                logAction('error', 'classes', "Failed to update class: $class_name - Database error", 'failed', $class_id, 'classes');
+            }
+        }
+        header("Location: manage_classes.php");
         exit();
     }
 }
@@ -77,19 +251,63 @@ if (isset($_POST['edit_class'])) {
 // DELETE CLASS (AJAX or normal GET)
 if (isset($_GET['delete'])) {
     $id = intval($_GET['delete']);
+    
+    // Get class info for logging
+    $class_query = mysqli_query($conn, "SELECT * FROM class WHERE class_id='$id'");
+    $class_info = mysqli_fetch_assoc($class_query);
+    
     $result = mysqli_query($conn, "DELETE FROM class WHERE class_id='$id'");
     
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         if ($result && mysqli_affected_rows($conn) > 0) {
+            // Log class deletion (AJAX)
+            if (function_exists('logAction') && $class_info) {
+                logAction(
+                    'delete', 
+                    'classes', 
+                    "Deleted class: {$class_info['class_name']} (ID: $id)", 
+                    'success', 
+                    $id, 
+                    'classes',
+                    $class_info,
+                    null
+                );
+            }
             echo json_encode(['success' => true]);
         } else {
+            if (function_exists('logAction')) {
+                logAction('error', 'classes', "Failed to delete class: Class not found (ID: $id)", 'failed', $id, 'classes');
+            }
             echo json_encode(['success' => false, 'error' => 'Class not found']);
         }
         exit();
+    } else {
+        // Non-AJAX GET
+        if ($result && mysqli_affected_rows($conn) > 0) {
+            $_SESSION['success_msg'] = "Class deleted successfully!";
+            
+            // Log class deletion (non-AJAX)
+            if (function_exists('logAction') && $class_info) {
+                logAction(
+                    'delete', 
+                    'classes', 
+                    "Deleted class: {$class_info['class_name']} (ID: $id)", 
+                    'success', 
+                    $id, 
+                    'classes',
+                    $class_info,
+                    null
+                );
+            }
+        } else {
+            $_SESSION['error_msg'] = "Class not found or couldn't be deleted!";
+            if (function_exists('logAction')) {
+                logAction('error', 'classes', "Failed to delete class: Class not found (ID: $id)", 'failed', $id, 'classes');
+            }
+        }
+        header("Location: manage_classes.php");
+        exit();
     }
-    
-    header("Location: manage_classes.php");
-    exit();
 }
 
 // ================= FETCH CLASSES =================

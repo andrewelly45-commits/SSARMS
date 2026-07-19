@@ -2,9 +2,71 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 if(!isset($_SESSION['role']) || $_SESSION['role']!='admin'){
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'departments', "Unauthorized access attempt to manage departments by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG MANAGE DEPARTMENTS PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'departments', "Admin viewed manage departments page", 'success', null, 'departments');
 }
 
 // ADD DEPARTMENT
@@ -15,9 +77,33 @@ if(isset($_POST['add_department'])){
     
     if(mysqli_num_rows($check)>0){
         $_SESSION['error']="Department already exists!";
+        if (function_exists('logAction')) {
+            logAction('error', 'departments', "Failed to add department: $name already exists", 'failed');
+        }
     }else{
-        mysqli_query($conn, "INSERT INTO department(department_name) VALUES('$name')");
-        $_SESSION['success']="Department added successfully!";
+        $insert = mysqli_query($conn, "INSERT INTO department(department_name) VALUES('$name')");
+        if($insert){
+            $_SESSION['success']="Department added successfully!";
+            
+            // Log successful department addition
+            if (function_exists('logAction')) {
+                logAction(
+                    'add', 
+                    'departments', 
+                    "Added new department: $name", 
+                    'success', 
+                    mysqli_insert_id($conn), 
+                    'departments',
+                    null,
+                    ['department_name' => $name]
+                );
+            }
+        } else {
+            $_SESSION['error']="Failed to add department!";
+            if (function_exists('logAction')) {
+                logAction('error', 'departments', "Failed to add department: $name - Database error", 'failed');
+            }
+        }
     }
     
     header("Location: manage_departments.php");
@@ -29,8 +115,34 @@ if(isset($_POST['update_department'])){
     $id=$_POST['department_id'];
     $name=mysqli_real_escape_string($conn, $_POST['department_name']);
     
-    mysqli_query($conn, "UPDATE department SET department_name='$name' WHERE department_id='$id'");
-    $_SESSION['success']="Department updated successfully!";
+    // Get old data for audit
+    $old_query = mysqli_query($conn, "SELECT * FROM department WHERE department_id='$id'");
+    $old_data = mysqli_fetch_assoc($old_query);
+    
+    $update = mysqli_query($conn, "UPDATE department SET department_name='$name' WHERE department_id='$id'");
+    
+    if($update){
+        $_SESSION['success']="Department updated successfully!";
+        
+        // Log successful update
+        if (function_exists('logAction')) {
+            logAction(
+                'edit', 
+                'departments', 
+                "Updated department: $name (ID: $id)", 
+                'success', 
+                $id, 
+                'departments',
+                $old_data,
+                ['department_name' => $name]
+            );
+        }
+    } else {
+        $_SESSION['error']="Failed to update department!";
+        if (function_exists('logAction')) {
+            logAction('error', 'departments', "Failed to update department: $name - Database error", 'failed', $id, 'departments');
+        }
+    }
     
     header("Location: manage_departments.php");
     exit();
@@ -38,10 +150,58 @@ if(isset($_POST['update_department'])){
 
 // DELETE DEPARTMENT
 if(isset($_GET['delete'])){
-    $id=$_GET['delete'];
+    $id = (int)$_GET['delete'];
     
-    mysqli_query($conn, "DELETE FROM department WHERE department_id='$id'");
-    $_SESSION['success']="Department deleted successfully!";
+    // Get department info for logging
+    $dept_query = mysqli_query($conn, "SELECT * FROM department WHERE department_id='$id'");
+    $dept_info = mysqli_fetch_assoc($dept_query);
+    
+    // Check if department has teachers assigned
+    $check_teachers = mysqli_query($conn, "SELECT COUNT(*) as count FROM teacher WHERE department_id='$id'");
+    $teacher_count = mysqli_fetch_assoc($check_teachers);
+    
+    if($teacher_count['count'] > 0){
+        $_SESSION['error'] = "Cannot delete department! It has " . $teacher_count['count'] . " teachers assigned.";
+        if (function_exists('logAction') && $dept_info) {
+            logAction('error', 'departments', "Cannot delete department: {$dept_info['department_name']} - Has " . $teacher_count['count'] . " teachers assigned", 'failed', $id, 'departments');
+        }
+    } else {
+        // Check if department has subjects
+        $check_subjects = mysqli_query($conn, "SELECT COUNT(*) as count FROM subject WHERE department_id='$id'");
+        $subject_count = mysqli_fetch_assoc($check_subjects);
+        
+        if($subject_count['count'] > 0){
+            $_SESSION['error'] = "Cannot delete department! It has " . $subject_count['count'] . " subjects assigned.";
+            if (function_exists('logAction') && $dept_info) {
+                logAction('error', 'departments', "Cannot delete department: {$dept_info['department_name']} - Has " . $subject_count['count'] . " subjects assigned", 'failed', $id, 'departments');
+            }
+        } else {
+            $delete = mysqli_query($conn, "DELETE FROM department WHERE department_id='$id'");
+            
+            if($delete){
+                $_SESSION['success']="Department deleted successfully!";
+                
+                // Log deletion
+                if (function_exists('logAction') && $dept_info) {
+                    logAction(
+                        'delete', 
+                        'departments', 
+                        "Deleted department: {$dept_info['department_name']} (ID: $id)", 
+                        'success', 
+                        $id, 
+                        'departments',
+                        $dept_info,
+                        null
+                    );
+                }
+            } else {
+                $_SESSION['error']="Failed to delete department!";
+                if (function_exists('logAction') && $dept_info) {
+                    logAction('error', 'departments', "Failed to delete department: {$dept_info['department_name']} - Database error", 'failed', $id, 'departments');
+                }
+            }
+        }
+    }
     
     header("Location: manage_departments.php");
     exit();

@@ -2,19 +2,75 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER WITH BETTER ERROR HANDLING
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// In your view_marks.php delete function
-include '../auth/audit_functions.php';
-
-/* ================= AUTH CHECK ================= */
-if (!isset($_SESSION['role']) || $_SESSION['role'] != 'teacher') {
+// ============================================
+// AUTH CHECK - SUPPORT BOTH TEACHER AND ACADEMIC
+// ============================================
+$allowed_roles = ['teacher', 'academic'];
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], $allowed_roles)) {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'marks', "Unauthorized access attempt to view marks by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
 }
 
 $user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['role'];
 
 /* ================= GET TEACHER ================= */
 $teacher_query = mysqli_query($conn,
@@ -26,15 +82,35 @@ $teacher_query = mysqli_query($conn,
 $teacher = mysqli_fetch_assoc($teacher_query);
 
 if (!$teacher) {
+    if (function_exists('logAction')) {
+        logAction('error', 'marks', "Teacher not found for user_id: $user_id", 'failed');
+    }
     die("Teacher not found");
 }
 
 $teacher_id = $teacher['teacher_id'];
 
+// ============================================
+// LOG VIEW MARKS PAGE ACCESS
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'marks', ucfirst($user_role) . " viewed marks page: " . ($_SESSION['full_name'] ?? 'Unknown'), 'success', $teacher_id, 'users');
+}
+
 /* ================= DELETE MARKS FOR SPECIFIC TERM ================= */
 if (isset($_GET['delete_term_marks'])) {
     $class_id = mysqli_real_escape_string($conn, $_GET['class_id']);
     $term = mysqli_real_escape_string($conn, $_GET['term']);
+    
+    // Get class name for logging
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
+    $class_row = mysqli_fetch_assoc($class_query);
+    $class_name = $class_row['class_name'] ?? 'Unknown Class';
+    
+    // Log delete attempt
+    if (function_exists('logAction')) {
+        logAction('delete', 'marks', "Attempting to delete $term marks for $class_name", 'pending', $class_id, 'marks');
+    }
     
     // Check if the class belongs to this teacher
     $check_class_query = mysqli_query($conn,
@@ -58,7 +134,23 @@ if (isset($_GET['delete_term_marks'])) {
         
         if ($published_data['published_count'] > 0) {
             $_SESSION['error_message'] = "Cannot delete $term results because some marks are already published!";
+            
+            if (function_exists('logAction')) {
+                logAction('delete', 'marks', "Failed to delete $term marks for $class_name - Contains published marks", 'failed', $class_id, 'marks');
+            }
         } else {
+            // Get count of marks to be deleted
+            $count_query = mysqli_query($conn,
+                "SELECT COUNT(*) as total 
+                 FROM marks 
+                 WHERE class_id = '$class_id' 
+                 AND teacher_id = '$teacher_id' 
+                 AND term = '$term'
+                 AND status = 'pending'"
+            );
+            $count_data = mysqli_fetch_assoc($count_query);
+            $deleted_count = $count_data['total'] ?? 0;
+            
             // Delete all pending marks for this class and term
             $delete_query = "DELETE FROM marks 
                             WHERE class_id = '$class_id' 
@@ -67,33 +159,44 @@ if (isset($_GET['delete_term_marks'])) {
                             AND status = 'pending'";
             
             if (mysqli_query($conn, $delete_query)) {
-                $deleted_count = mysqli_affected_rows($conn);
+                $actual_deleted = mysqli_affected_rows($conn);
                 
-                // Audit log
-                logSystemAction(
-                    $_SESSION['user_id'],
-                    $_SESSION['role'],
-                    $_SESSION['full_name'],
-                    'delete',
-                    "Deleted $deleted_count pending marks for $term in class ID: $class_id",
-                    'marks',
-                    'marks',
-                    $class_id,
-                    [
-                        'deleted_records' => $deleted_count,
+                // Log successful deletion
+                if (function_exists('logAction')) {
+                    $log_data = [
+                        'deleted_records' => $actual_deleted,
                         'class_id' => $class_id,
+                        'class_name' => $class_name,
                         'term' => $term
-                    ],
-                    null
-                );
+                    ];
+                    
+                    logAction(
+                        'delete', 
+                        'marks', 
+                        "Deleted $actual_deleted pending marks for $class_name - $term", 
+                        'success', 
+                        $class_id, 
+                        'marks',
+                        null,
+                        $log_data
+                    );
+                }
                 
-                $_SESSION['success_message'] = "Successfully deleted $deleted_count pending result(s) for $term!";
+                $_SESSION['success_message'] = "Successfully deleted $actual_deleted pending result(s) for $term!";
             } else {
                 $_SESSION['error_message'] = "Error deleting marks: " . mysqli_error($conn);
+                
+                if (function_exists('logAction')) {
+                    logAction('error', 'marks', "Failed to delete marks: " . mysqli_error($conn), 'failed', $class_id, 'marks');
+                }
             }
         }
     } else {
         $_SESSION['error_message'] = "Unauthorized access to this class!";
+        
+        if (function_exists('logAction')) {
+            logAction('access_denied', 'marks', "Unauthorized delete attempt for class: $class_name by user: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+        }
     }
     
     // Redirect to remove delete parameter from URL
@@ -121,6 +224,17 @@ $class_id = isset($_GET['class_id'])
 $term = isset($_GET['term'])
     ? $_GET['term']
     : 'all';
+
+// Log class selection if a class is selected
+if (!empty($class_id)) {
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
+    $class_row = mysqli_fetch_assoc($class_query);
+    $class_name = $class_row['class_name'] ?? 'Unknown Class';
+    
+    if (function_exists('logAction')) {
+        logAction('view', 'marks', ucfirst($user_role) . " viewed marks for class: $class_name (Term: $term)", 'success', $class_id, 'classes');
+    }
+}
 
 /* ================= FETCH MARKS ================= */
 $marks = null;
@@ -477,7 +591,57 @@ tr:hover{
 </head>
 <body>
 
-<?php include 'teacher_sidebar.php'; ?>
+<?php
+// ============================================
+// INCLUDE CORRECT SIDEBAR BASED ON ROLE
+// ============================================
+if ($user_role == 'academic') {
+    // Try multiple paths for academic sidebar
+    $sidebar_paths = [
+        'academic_sidebar.php',
+        '../academic_sidebar.php',
+        '../academic/academic_sidebar.php',
+        '../../academic/academic_sidebar.php',
+        '../admin/academic_sidebar.php'
+    ];
+    $found = false;
+    foreach ($sidebar_paths as $path) {
+        if (file_exists($path)) {
+            include $path;
+            $found = true;
+            break;
+        }
+    }
+    if (!$found) {
+        // Fallback - try to include from admin folder
+        if (file_exists('../admin/admin_sidebar.php')) {
+            include '../admin/admin_sidebar.php';
+        }
+    }
+} else {
+    // For teacher users - try multiple paths
+    $sidebar_paths = [
+        'teacher_sidebar.php',
+        '../teacher_sidebar.php',
+        '../teacher/teacher_sidebar.php',
+        '../../teacher/teacher_sidebar.php'
+    ];
+    $found = false;
+    foreach ($sidebar_paths as $path) {
+        if (file_exists($path)) {
+            include $path;
+            $found = true;
+            break;
+        }
+    }
+    if (!$found) {
+        // Fallback to admin sidebar if teacher sidebar not found
+        if (file_exists('../admin/admin_sidebar.php')) {
+            include '../admin/admin_sidebar.php';
+        }
+    }
+}
+?>
 
 <?php include '../auth/topbar.php'; ?>
 

@@ -2,16 +2,78 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // CHECK ADMIN
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'teachers', "Unauthorized access attempt to manage teachers by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
 }
 
-            /*  ADD TEACHER  */
+// ============================================
+// LOG MANAGE TEACHERS PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'teachers', "Admin viewed manage teachers page", 'success', null, 'teachers');
+}
+
+/*  ADD TEACHER  */
 if (isset($_POST['add_teacher'])) {
     $name = mysqli_real_escape_string($conn, $_POST['full_name']);
     $email = mysqli_real_escape_string($conn, $_POST['email']);
@@ -24,6 +86,9 @@ if (isset($_POST['add_teacher'])) {
     $check_email = mysqli_query($conn, "SELECT user_id FROM users WHERE email = '$email'");
     if (mysqli_num_rows($check_email) > 0) {
         $_SESSION['error_msg'] = "Email already exists!";
+        if (function_exists('logAction')) {
+            logAction('error', 'teachers', "Failed to add teacher: Email already exists - $email", 'failed');
+        }
     } else {
         $insert_user = mysqli_query($conn, "
         INSERT INTO users (full_name, email, password, role, gender)
@@ -34,15 +99,59 @@ if (isset($_POST['add_teacher'])) {
             $user_id = mysqli_insert_id($conn);
             mysqli_query($conn, "INSERT INTO teacher (user_id, phone_no, department_id, status) VALUES ('$user_id','$phone','$department_id','active')");
             $teacher_id = mysqli_insert_id($conn);
-
+            
+            $class_ids = [];
             if (!empty($_POST['class_ids'])) {
                 foreach ($_POST['class_ids'] as $class_id) {
                     mysqli_query($conn, "INSERT INTO teacher_class (teacher_id, class_id) VALUES ('$teacher_id', '$class_id')");
+                    $class_ids[] = $class_id;
                 }
             }
             $_SESSION['success_msg'] = "Teacher added successfully!";
+            
+            // Log successful teacher addition
+            if (function_exists('logAction')) {
+                // Get department name
+                $dept_query = mysqli_query($conn, "SELECT department_name FROM department WHERE department_id='$department_id'");
+                $dept = mysqli_fetch_assoc($dept_query);
+                $dept_name = $dept['department_name'] ?? 'Unknown';
+                
+                // Get class names
+                $class_names = [];
+                if (!empty($class_ids)) {
+                    $ids = implode(',', $class_ids);
+                    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id IN ($ids)");
+                    while ($cls = mysqli_fetch_assoc($class_query)) {
+                        $class_names[] = $cls['class_name'];
+                    }
+                }
+                
+                $teacher_data = [
+                    'name' => $name,
+                    'email' => $email,
+                    'phone' => $phone,
+                    'department' => $dept_name,
+                    'role' => $role,
+                    'gender' => $gender,
+                    'classes' => implode(', ', $class_names)
+                ];
+                
+                logAction(
+                    'add', 
+                    'teachers', 
+                    "Added new teacher: $name (Role: $role, Department: $dept_name)", 
+                    'success', 
+                    $teacher_id, 
+                    'teachers',
+                    null,
+                    $teacher_data
+                );
+            }
         } else {
             $_SESSION['error_msg'] = "Failed to add teacher!";
+            if (function_exists('logAction')) {
+                logAction('error', 'teachers', "Failed to add teacher: $name - Database error", 'failed');
+            }
         }
     }
     header("Location: manage_teachers.php");
@@ -59,6 +168,20 @@ if (isset($_POST['edit_teacher'])) {
     $gender = mysqli_real_escape_string($conn, $_POST['gender']);
     $role = mysqli_real_escape_string($conn, $_POST['role']);
 
+    // Get old data for audit
+    $old_query = mysqli_query($conn, "
+        SELECT t.*, u.full_name, u.email, u.gender, u.role, d.department_name,
+               GROUP_CONCAT(DISTINCT c.class_name SEPARATOR ', ') AS classes
+        FROM teacher t
+        JOIN users u ON t.user_id = u.user_id
+        LEFT JOIN department d ON t.department_id = d.department_id
+        LEFT JOIN teacher_class tc ON t.teacher_id = tc.teacher_id
+        LEFT JOIN class c ON tc.class_id = c.class_id
+        WHERE t.teacher_id = '$teacher_id'
+        GROUP BY t.teacher_id
+    ");
+    $old_data = mysqli_fetch_assoc($old_query);
+
     $getUser = mysqli_query($conn, "SELECT user_id FROM teacher WHERE teacher_id='$teacher_id'");
     $user = mysqli_fetch_assoc($getUser);
     $user_id = $user['user_id'];
@@ -66,17 +189,62 @@ if (isset($_POST['edit_teacher'])) {
     $check_email = mysqli_query($conn, "SELECT user_id FROM users WHERE email = '$email' AND user_id != '$user_id'");
     if (mysqli_num_rows($check_email) > 0) {
         $_SESSION['error_msg'] = "Email already exists for another user!";
+        if (function_exists('logAction')) {
+            logAction('error', 'teachers', "Failed to update teacher $name: Email already exists - $email", 'failed', $teacher_id, 'teachers');
+        }
     } else {
         mysqli_query($conn, "UPDATE users SET full_name='$name', email='$email', gender='$gender', role='$role' WHERE user_id='$user_id'");
         mysqli_query($conn, "UPDATE teacher SET phone_no='$phone', department_id='$department_id' WHERE teacher_id='$teacher_id'");
         mysqli_query($conn, "DELETE FROM teacher_class WHERE teacher_id='$teacher_id'");
 
+        $class_ids = [];
         if (!empty($_POST['class_ids'])) {
             foreach ($_POST['class_ids'] as $class_id) {
                 mysqli_query($conn, "INSERT INTO teacher_class (teacher_id, class_id) VALUES ('$teacher_id', '$class_id')");
+                $class_ids[] = $class_id;
             }
         }
+        
         $_SESSION['success_msg'] = $role == "academic" ? "Teacher updated and changed to Academic Teacher!" : "Teacher updated successfully!";
+        
+        // Log successful update
+        if (function_exists('logAction')) {
+            // Get new department name
+            $dept_query = mysqli_query($conn, "SELECT department_name FROM department WHERE department_id='$department_id'");
+            $dept = mysqli_fetch_assoc($dept_query);
+            $dept_name = $dept['department_name'] ?? 'Unknown';
+            
+            // Get new class names
+            $class_names = [];
+            if (!empty($class_ids)) {
+                $ids = implode(',', $class_ids);
+                $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id IN ($ids)");
+                while ($cls = mysqli_fetch_assoc($class_query)) {
+                    $class_names[] = $cls['class_name'];
+                }
+            }
+            
+            $new_data = [
+                'name' => $name,
+                'email' => $email,
+                'phone' => $phone,
+                'department' => $dept_name,
+                'role' => $role,
+                'gender' => $gender,
+                'classes' => implode(', ', $class_names)
+            ];
+            
+            logAction(
+                'edit', 
+                'teachers', 
+                "Updated teacher: $name (ID: $teacher_id)", 
+                'success', 
+                $teacher_id, 
+                'teachers',
+                $old_data,
+                $new_data
+            );
+        }
     }
     header("Location: manage_teachers.php");
     exit();
@@ -94,15 +262,100 @@ if (isset($_GET['suspend']) || isset($_GET['activate'])) {
     if ($teacher) {
         mysqli_query($conn, "UPDATE users SET status='$status' WHERE user_id='{$teacher['user_id']}'");
         $_SESSION['success_msg'] = "Teacher '{$teacher['name']}' has been $msg!";
+        
+        // Log suspend/activate
+        if (function_exists('logAction')) {
+            logAction(
+                $action == 'suspend' ? 'suspend' : 'activate', 
+                'teachers', 
+                ucfirst($action) . "d teacher: " . $teacher['name'] . " (ID: $teacher_id)", 
+                'success', 
+                $teacher_id, 
+                'teachers',
+                ['status' => $action == 'suspend' ? 'active' : 'suspended'],
+                ['status' => $action == 'suspend' ? 'suspended' : 'active']
+            );
+        }
     } else {
         $_SESSION['error_msg'] = "Teacher not found!";
+        if (function_exists('logAction')) {
+            logAction('error', 'teachers', "Failed to $action teacher: Teacher not found (ID: $teacher_id)", 'failed', $teacher_id, 'teachers');
+        }
     }
+    header("Location: manage_teachers.php");
+    exit();
+}
+
+// DELETE TEACHER
+if (isset($_GET['delete'])) {
+    $teacher_id = (int)$_GET['delete'];
+    
+    // Get teacher info for logging
+    $teacher_query = mysqli_query($conn, "
+        SELECT t.*, u.full_name, u.email, u.user_id
+        FROM teacher t
+        JOIN users u ON t.user_id = u.user_id
+        WHERE t.teacher_id = '$teacher_id'
+    ");
+    $teacher_info = mysqli_fetch_assoc($teacher_query);
+    
+    if ($teacher_info) {
+        $user_id = $teacher_info['user_id'];
+        $name = $teacher_info['full_name'];
+        
+        // Delete teacher_class records
+        mysqli_query($conn, "DELETE FROM teacher_class WHERE teacher_id='$teacher_id'");
+        
+        // Delete teacher_subject records
+        mysqli_query($conn, "DELETE FROM teacher_subject WHERE teacher_id='$teacher_id'");
+        
+        // Delete teacher record
+        $delete_teacher = mysqli_query($conn, "DELETE FROM teacher WHERE teacher_id='$teacher_id'");
+        
+        if ($delete_teacher) {
+            // Delete user record
+            mysqli_query($conn, "DELETE FROM users WHERE user_id='$user_id'");
+            
+            $_SESSION['success_msg'] = "Teacher deleted successfully!";
+            
+            // Log deletion
+            if (function_exists('logAction')) {
+                logAction(
+                    'delete', 
+                    'teachers', 
+                    "Deleted teacher: $name (ID: $teacher_id, Email: {$teacher_info['email']})", 
+                    'success', 
+                    $teacher_id, 
+                    'teachers',
+                    $teacher_info,
+                    null
+                );
+            }
+        } else {
+            $_SESSION['error_msg'] = "Failed to delete teacher!";
+            if (function_exists('logAction')) {
+                logAction('error', 'teachers', "Failed to delete teacher: $name (ID: $teacher_id)", 'failed', $teacher_id, 'teachers');
+            }
+        }
+    } else {
+        $_SESSION['error_msg'] = "Teacher not found!";
+        if (function_exists('logAction')) {
+            logAction('error', 'teachers', "Failed to delete teacher: Teacher not found (ID: $teacher_id)", 'failed', $teacher_id, 'teachers');
+        }
+    }
+    
     header("Location: manage_teachers.php");
     exit();
 }
 
 /*  FETCH DATA  */
 $search = isset($_GET['search']) ? trim(mysqli_real_escape_string($conn, $_GET['search'])) : '';
+
+// Log search if performed
+if (!empty($search) && function_exists('logAction')) {
+    logAction('search', 'teachers', "Admin searched teachers with keyword: $search", 'success', null, 'teachers');
+}
+
 $classes = mysqli_query($conn, "SELECT * FROM class ORDER BY class_name ASC");
 $departments = mysqli_query($conn, "SELECT * FROM department ORDER BY department_name ASC");
 
@@ -152,9 +405,55 @@ if(isset($_POST['assign_subject'])){
     if(mysqli_num_rows($check) == 0){
         mysqli_query($conn, "INSERT INTO teacher_subject (teacher_id, subject_id) VALUES ('$teacher_id','$subject_id')");
         $_SESSION['success_msg'] = "Subject '{$subject_info['subject_name']}' assigned to {$teacher_info['full_name']} successfully!";
+        
+        // Log subject assignment
+        if (function_exists('logAction')) {
+            logAction(
+                'assign', 
+                'teachers', 
+                "Assigned subject '{$subject_info['subject_name']}' to teacher {$teacher_info['full_name']} (ID: $teacher_id)", 
+                'success', 
+                $teacher_id, 
+                'teachers',
+                null,
+                ['subject' => $subject_info['subject_name'], 'teacher' => $teacher_info['full_name']]
+            );
+        }
     } else {
         $_SESSION['error_msg'] = "Subject '{$subject_info['subject_name']}' is already assigned to this teacher!";
+        if (function_exists('logAction')) {
+            logAction('error', 'teachers', "Failed to assign subject '{$subject_info['subject_name']}' to teacher {$teacher_info['full_name']} - Already assigned", 'failed', $teacher_id, 'teachers');
+        }
     }
+    header("Location: manage_teachers.php");
+    exit();
+}
+
+// REMOVE SUBJECT ASSIGNMENT
+if (isset($_GET['remove_subject']) && isset($_GET['teacher_id'])) {
+    $teacher_id = (int)$_GET['teacher_id'];
+    $subject_id = (int)$_GET['remove_subject'];
+    
+    $teacher_info = mysqli_fetch_assoc(mysqli_query($conn, "SELECT u.full_name FROM teacher t JOIN users u ON t.user_id = u.user_id WHERE t.teacher_id = '$teacher_id'"));
+    $subject_info = mysqli_fetch_assoc(mysqli_query($conn, "SELECT subject_name FROM subject WHERE subject_id = '$subject_id'"));
+    
+    mysqli_query($conn, "DELETE FROM teacher_subject WHERE teacher_id='$teacher_id' AND subject_id='$subject_id'");
+    $_SESSION['success_msg'] = "Subject '{$subject_info['subject_name']}' removed from teacher {$teacher_info['full_name']} successfully!";
+    
+    // Log subject removal
+    if (function_exists('logAction')) {
+        logAction(
+            'remove', 
+            'teachers', 
+            "Removed subject '{$subject_info['subject_name']}' from teacher {$teacher_info['full_name']} (ID: $teacher_id)", 
+            'success', 
+            $teacher_id, 
+            'teachers',
+            null,
+            ['subject' => $subject_info['subject_name'], 'teacher' => $teacher_info['full_name']]
+        );
+    }
+    
     header("Location: manage_teachers.php");
     exit();
 }

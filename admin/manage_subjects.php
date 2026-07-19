@@ -1,17 +1,85 @@
+
 <?php
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 /* ================= CHECK ADMIN ================= */
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'subjects', "Unauthorized access attempt to manage subjects by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG MANAGE SUBJECTS PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'subjects', "Admin viewed manage subjects page", 'success', null, 'subjects');
 }
 
 /* ================= ADD SUBJECT ================= */
 if (isset($_POST['add_subject'])) {
     $subject_name = mysqli_real_escape_string($conn, trim($_POST['subject_name']));
     $department_id = (int)$_POST['department_id'];
+    
+    // Get department name for logging
+    $dept_query = mysqli_query($conn, "SELECT department_name FROM department WHERE department_id='$department_id'");
+    $dept = mysqli_fetch_assoc($dept_query);
+    $dept_name = $dept['department_name'] ?? 'Unknown';
     
     $check = mysqli_query($conn, "
         SELECT * FROM subject 
@@ -21,6 +89,9 @@ if (isset($_POST['add_subject'])) {
     
     if (mysqli_num_rows($check) > 0) {
         $_SESSION['error_msg'] = "Subject already exists in this department!";
+        if (function_exists('logAction')) {
+            logAction('error', 'subjects', "Failed to add subject: $subject_name already exists in $dept_name", 'failed');
+        }
     } else {
         $insert = mysqli_query($conn, "
             INSERT INTO subject (subject_name, department_id) 
@@ -29,8 +100,30 @@ if (isset($_POST['add_subject'])) {
         
         if ($insert) {
             $_SESSION['success_msg'] = "Subject added successfully!";
+            
+            // Log successful subject addition
+            if (function_exists('logAction')) {
+                $subject_data = [
+                    'subject_name' => $subject_name,
+                    'department_id' => $department_id,
+                    'department_name' => $dept_name
+                ];
+                logAction(
+                    'add', 
+                    'subjects', 
+                    "Added new subject: $subject_name (Department: $dept_name)", 
+                    'success', 
+                    mysqli_insert_id($conn), 
+                    'subjects',
+                    null,
+                    $subject_data
+                );
+            }
         } else {
             $_SESSION['error_msg'] = "Failed to add subject!";
+            if (function_exists('logAction')) {
+                logAction('error', 'subjects', "Failed to add subject: $subject_name - Database error", 'failed');
+            }
         }
     }
     
@@ -44,6 +137,20 @@ if (isset($_POST['update_subject'])) {
     $subject_name = mysqli_real_escape_string($conn, trim($_POST['subject_name']));
     $department_id = (int)$_POST['department_id'];
     
+    // Get old data for audit
+    $old_query = mysqli_query($conn, "
+        SELECT s.*, d.department_name 
+        FROM subject s
+        LEFT JOIN department d ON s.department_id = d.department_id
+        WHERE s.subject_id = $subject_id
+    ");
+    $old_data = mysqli_fetch_assoc($old_query);
+    
+    // Get new department name
+    $dept_query = mysqli_query($conn, "SELECT department_name FROM department WHERE department_id='$department_id'");
+    $dept = mysqli_fetch_assoc($dept_query);
+    $dept_name = $dept['department_name'] ?? 'Unknown';
+    
     $update = mysqli_query($conn, "
         UPDATE subject 
         SET subject_name = '$subject_name', 
@@ -53,8 +160,30 @@ if (isset($_POST['update_subject'])) {
     
     if ($update) {
         $_SESSION['success_msg'] = "Subject updated successfully!";
+        
+        // Log successful update
+        if (function_exists('logAction')) {
+            $new_data = [
+                'subject_name' => $subject_name,
+                'department_id' => $department_id,
+                'department_name' => $dept_name
+            ];
+            logAction(
+                'edit', 
+                'subjects', 
+                "Updated subject: $subject_name (ID: $subject_id)", 
+                'success', 
+                $subject_id, 
+                'subjects',
+                $old_data,
+                $new_data
+            );
+        }
     } else {
         $_SESSION['error_msg'] = "Failed to update subject!";
+        if (function_exists('logAction')) {
+            logAction('error', 'subjects', "Failed to update subject: $subject_name - Database error", 'failed', $subject_id, 'subjects');
+        }
     }
     
     header("Location: manage_subjects.php");
@@ -65,18 +194,47 @@ if (isset($_POST['update_subject'])) {
 if (isset($_GET['delete_subject'])) {
     $subject_id = (int)$_GET['delete_subject'];
     
+    // Get subject info for logging
+    $subject_query = mysqli_query($conn, "
+        SELECT s.*, d.department_name 
+        FROM subject s
+        LEFT JOIN department d ON s.department_id = d.department_id
+        WHERE s.subject_id = $subject_id
+    ");
+    $subject_info = mysqli_fetch_assoc($subject_query);
+    
     $check = mysqli_query($conn, "
         SELECT * FROM teacher_subject WHERE subject_id = $subject_id
     ");
     
     if (mysqli_num_rows($check) > 0) {
         $_SESSION['error_msg'] = "Cannot delete subject! It is currently assigned to classes.";
+        if (function_exists('logAction') && $subject_info) {
+            logAction('error', 'subjects', "Cannot delete subject: {$subject_info['subject_name']} - Currently assigned to classes", 'failed', $subject_id, 'subjects');
+        }
     } else {
         $delete = mysqli_query($conn, "DELETE FROM subject WHERE subject_id = $subject_id");
         if ($delete) {
             $_SESSION['success_msg'] = "Subject deleted successfully!";
+            
+            // Log deletion
+            if (function_exists('logAction') && $subject_info) {
+                logAction(
+                    'delete', 
+                    'subjects', 
+                    "Deleted subject: {$subject_info['subject_name']} (Department: {$subject_info['department_name']})", 
+                    'success', 
+                    $subject_id, 
+                    'subjects',
+                    $subject_info,
+                    null
+                );
+            }
         } else {
             $_SESSION['error_msg'] = "Failed to delete subject!";
+            if (function_exists('logAction') && $subject_info) {
+                logAction('error', 'subjects', "Failed to delete subject: {$subject_info['subject_name']} - Database error", 'failed', $subject_id, 'subjects');
+            }
         }
     }
     
@@ -90,6 +248,19 @@ if (isset($_POST['assign_teacher_subject'])) {
     $class_id = (int)$_POST['class_id'];
     $subject_id = (int)$_POST['subject_id'];
     
+    // Get names for logging
+    $teacher_query = mysqli_query($conn, "SELECT u.full_name FROM teacher t JOIN users u ON t.user_id = u.user_id WHERE t.teacher_id = $teacher_id");
+    $teacher = mysqli_fetch_assoc($teacher_query);
+    $teacher_name = $teacher['full_name'] ?? 'Unknown Teacher';
+    
+    $subject_query = mysqli_query($conn, "SELECT subject_name FROM subject WHERE subject_id = $subject_id");
+    $subject = mysqli_fetch_assoc($subject_query);
+    $subject_name = $subject['subject_name'] ?? 'Unknown Subject';
+    
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id = $class_id");
+    $class = mysqli_fetch_assoc($class_query);
+    $class_name = $class['class_name'] ?? 'Unknown Class';
+    
     $check = mysqli_query($conn, "
         SELECT * FROM teacher_subject 
         WHERE teacher_id = $teacher_id 
@@ -99,6 +270,9 @@ if (isset($_POST['assign_teacher_subject'])) {
     
     if (mysqli_num_rows($check) > 0) {
         $_SESSION['error_msg'] = "This teacher is already assigned to this subject in this class!";
+        if (function_exists('logAction')) {
+            logAction('error', 'subjects', "Failed to assign: $teacher_name already assigned to $subject_name in $class_name", 'failed', $subject_id, 'subjects');
+        }
     } else {
         $insert = mysqli_query($conn, "
             INSERT INTO teacher_subject (teacher_id, class_id, subject_id) 
@@ -107,8 +281,30 @@ if (isset($_POST['assign_teacher_subject'])) {
         
         if ($insert) {
             $_SESSION['success_msg'] = "Teacher assigned to subject successfully!";
+            
+            // Log assignment
+            if (function_exists('logAction')) {
+                $assignment_data = [
+                    'teacher' => $teacher_name,
+                    'subject' => $subject_name,
+                    'class' => $class_name
+                ];
+                logAction(
+                    'assign', 
+                    'subjects', 
+                    "Assigned teacher $teacher_name to subject $subject_name in class $class_name", 
+                    'success', 
+                    $subject_id, 
+                    'subjects',
+                    null,
+                    $assignment_data
+                );
+            }
         } else {
             $_SESSION['error_msg'] = "Failed to assign teacher!";
+            if (function_exists('logAction')) {
+                logAction('error', 'subjects', "Failed to assign $teacher_name to $subject_name in $class_name - Database error", 'failed', $subject_id, 'subjects');
+            }
         }
     }
     
@@ -120,14 +316,43 @@ if (isset($_POST['assign_teacher_subject'])) {
 if (isset($_GET['remove_assignment'])) {
     $teacher_subject_id = (int)$_GET['remove_assignment'];
     
+    // Get assignment info for logging
+    $assignment_query = mysqli_query($conn, "
+        SELECT ts.*, u.full_name AS teacher_name, s.subject_name, c.class_name
+        FROM teacher_subject ts
+        JOIN teacher t ON ts.teacher_id = t.teacher_id
+        JOIN users u ON t.user_id = u.user_id
+        JOIN subject s ON ts.subject_id = s.subject_id
+        JOIN class c ON ts.class_id = c.class_id
+        WHERE ts.teacher_subject_id = $teacher_subject_id
+    ");
+    $assignment_info = mysqli_fetch_assoc($assignment_query);
+    
     $delete = mysqli_query($conn, "
         DELETE FROM teacher_subject WHERE teacher_subject_id = $teacher_subject_id
     ");
     
     if ($delete) {
         $_SESSION['success_msg'] = "Assignment removed successfully!";
+        
+        // Log removal
+        if (function_exists('logAction') && $assignment_info) {
+            logAction(
+                'remove', 
+                'subjects', 
+                "Removed teacher {$assignment_info['teacher_name']} from subject {$assignment_info['subject_name']} in class {$assignment_info['class_name']}", 
+                'success', 
+                $assignment_info['subject_id'], 
+                'subjects',
+                $assignment_info,
+                null
+            );
+        }
     } else {
         $_SESSION['error_msg'] = "Failed to remove assignment!";
+        if (function_exists('logAction')) {
+            logAction('error', 'subjects', "Failed to remove assignment - Database error", 'failed', null, 'subjects');
+        }
     }
     
     header("Location: manage_subjects.php");
@@ -141,6 +366,31 @@ if (isset($_POST['update_assignment'])) {
     $class_id = (int)$_POST['class_id'];
     $subject_id = (int)$_POST['subject_id'];
     
+    // Get old data for audit
+    $old_query = mysqli_query($conn, "
+        SELECT ts.*, u.full_name AS teacher_name, s.subject_name, c.class_name
+        FROM teacher_subject ts
+        JOIN teacher t ON ts.teacher_id = t.teacher_id
+        JOIN users u ON t.user_id = u.user_id
+        JOIN subject s ON ts.subject_id = s.subject_id
+        JOIN class c ON ts.class_id = c.class_id
+        WHERE ts.teacher_subject_id = $teacher_subject_id
+    ");
+    $old_data = mysqli_fetch_assoc($old_query);
+    
+    // Get new names for logging
+    $teacher_query = mysqli_query($conn, "SELECT u.full_name FROM teacher t JOIN users u ON t.user_id = u.user_id WHERE t.teacher_id = $teacher_id");
+    $teacher = mysqli_fetch_assoc($teacher_query);
+    $teacher_name = $teacher['full_name'] ?? 'Unknown Teacher';
+    
+    $subject_query = mysqli_query($conn, "SELECT subject_name FROM subject WHERE subject_id = $subject_id");
+    $subject = mysqli_fetch_assoc($subject_query);
+    $subject_name = $subject['subject_name'] ?? 'Unknown Subject';
+    
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id = $class_id");
+    $class = mysqli_fetch_assoc($class_query);
+    $class_name = $class['class_name'] ?? 'Unknown Class';
+    
     $update = mysqli_query($conn, "
         UPDATE teacher_subject 
         SET teacher_id = $teacher_id, 
@@ -151,8 +401,30 @@ if (isset($_POST['update_assignment'])) {
     
     if ($update) {
         $_SESSION['success_msg'] = "Assignment updated successfully!";
+        
+        // Log update
+        if (function_exists('logAction')) {
+            $new_data = [
+                'teacher' => $teacher_name,
+                'subject' => $subject_name,
+                'class' => $class_name
+            ];
+            logAction(
+                'edit', 
+                'subjects', 
+                "Updated assignment: $teacher_name -> $subject_name in $class_name", 
+                'success', 
+                $subject_id, 
+                'subjects',
+                $old_data,
+                $new_data
+            );
+        }
     } else {
         $_SESSION['error_msg'] = "Failed to update assignment!";
+        if (function_exists('logAction')) {
+            logAction('error', 'subjects', "Failed to update assignment - Database error", 'failed', $subject_id, 'subjects');
+        }
     }
     
     header("Location: manage_subjects.php");
@@ -256,6 +528,8 @@ while ($row = mysqli_fetch_assoc($assignments)) {
     ];
 }
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>

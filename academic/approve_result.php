@@ -2,26 +2,75 @@
 session_start();
 include '../db.php';
 
-// When approving results
-include '../auth/audit_functions.php';
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        '../audit_logger.php',
+        'audit_logger.php',
+        '../includes/audit_logger.php',
+        '../../audit_logger.php',
+        dirname(__DIR__) . '/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
 
-logSystemAction(
-    $_SESSION['user_id'],
-    $_SESSION['role'],
-    $_SESSION['full_name'],
-    'approve',
-    "Approved results for Class: $class_name, Subject: $subject_name",
-    'results',
-    'marks',
-    $class_id,
-    null,
-    ['class' => $class_name, 'subject' => $subject_name]
-);
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 /* ================= AUTH CHECK ================= */
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'academic') {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'results', "Unauthorized access attempt to approve results by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
+    }
     header("Location: ../auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG APPROVE RESULTS PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'results', "Academic staff viewed approve results page", 'success', null, 'results');
 }
 
 /* ================= GET CLASS ================= */
@@ -31,6 +80,16 @@ $class_id = isset($_GET['class_id'])
 
 /* ================= APPROVE CLASS RESULTS ================= */
 if (isset($_GET['approve_class']) && !empty($class_id)) {
+    // Get class name for logging
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
+    $class_data = mysqli_fetch_assoc($class_query);
+    $class_name = $class_data['class_name'] ?? 'Unknown Class';
+    
+    // Log approve attempt
+    if (function_exists('logAction')) {
+        logAction('approve', 'results', "Attempting to approve all results for class: $class_name", 'pending', $class_id, 'results');
+    }
+    
     // Check if there are pending marks
     $check_query = mysqli_query($conn,
         "SELECT COUNT(*) as pending_count
@@ -51,11 +110,39 @@ if (isset($_GET['approve_class']) && !empty($class_id)) {
         
         if ($update_query) {
             $affected_rows = mysqli_affected_rows($conn);
+            
+            // Log successful approval
+            if (function_exists('logAction')) {
+                $log_data = [
+                    'class_id' => $class_id,
+                    'class_name' => $class_name,
+                    'approved_records' => $affected_rows
+                ];
+                logAction(
+                    'approve', 
+                    'results', 
+                    "Successfully approved $affected_rows results for entire class: $class_name", 
+                    'success', 
+                    $class_id, 
+                    'results',
+                    null,
+                    $log_data
+                );
+            }
+            
             $_SESSION['success_msg'] = "Successfully approved $affected_rows results for the entire class!";
         } else {
+            // Log error
+            if (function_exists('logAction')) {
+                logAction('error', 'results', "Failed to approve results for class: $class_name - " . mysqli_error($conn), 'failed', $class_id, 'results');
+            }
             $_SESSION['error_msg'] = "Error approving results: " . mysqli_error($conn);
         }
     } else {
+        // Log warning
+        if (function_exists('logAction')) {
+            logAction('info', 'results', "No pending results found for class: $class_name", 'info', $class_id, 'results');
+        }
         $_SESSION['warning_msg'] = "No pending results found for this class.";
     }
     
@@ -66,6 +153,20 @@ if (isset($_GET['approve_class']) && !empty($class_id)) {
 /* ================= APPROVE INDIVIDUAL SUBJECT ================= */
 if (isset($_GET['approve_subject']) && !empty($class_id)) {
     $subject_id = (int)$_GET['approve_subject'];
+    
+    // Get class and subject names for logging
+    $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
+    $class_data = mysqli_fetch_assoc($class_query);
+    $class_name = $class_data['class_name'] ?? 'Unknown Class';
+    
+    $subject_query = mysqli_query($conn, "SELECT subject_name FROM subject WHERE subject_id='$subject_id'");
+    $subject_data = mysqli_fetch_assoc($subject_query);
+    $subject_name = $subject_data['subject_name'] ?? 'Unknown Subject';
+    
+    // Log approve attempt
+    if (function_exists('logAction')) {
+        logAction('approve', 'results', "Attempting to approve $subject_name results for class: $class_name", 'pending', $class_id, 'results');
+    }
     
     // Check if there are pending marks for this subject
     $check_query = mysqli_query($conn,
@@ -88,11 +189,41 @@ if (isset($_GET['approve_subject']) && !empty($class_id)) {
         
         if ($update_query) {
             $affected_rows = mysqli_affected_rows($conn);
+            
+            // Log successful approval
+            if (function_exists('logAction')) {
+                $log_data = [
+                    'class_id' => $class_id,
+                    'class_name' => $class_name,
+                    'subject_id' => $subject_id,
+                    'subject_name' => $subject_name,
+                    'approved_records' => $affected_rows
+                ];
+                logAction(
+                    'approve', 
+                    'results', 
+                    "Successfully approved $affected_rows results for $subject_name in class: $class_name", 
+                    'success', 
+                    $class_id, 
+                    'results',
+                    null,
+                    $log_data
+                );
+            }
+            
             $_SESSION['success_msg'] = "Successfully approved $affected_rows results for this subject!";
         } else {
+            // Log error
+            if (function_exists('logAction')) {
+                logAction('error', 'results', "Failed to approve $subject_name results for class: $class_name - " . mysqli_error($conn), 'failed', $class_id, 'results');
+            }
             $_SESSION['error_msg'] = "Error approving results: " . mysqli_error($conn);
         }
     } else {
+        // Log warning
+        if (function_exists('logAction')) {
+            logAction('info', 'results', "No pending results found for $subject_name in class: $class_name", 'info', $class_id, 'results');
+        }
         $_SESSION['warning_msg'] = "No pending results found for this subject.";
     }
     
@@ -124,6 +255,11 @@ if (!empty($class_id)) {
     $class_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id='$class_id'");
     $class_data = mysqli_fetch_assoc($class_query);
     $class_name = $class_data['class_name'] ?? 'Class';
+    
+    // Log class selection
+    if (function_exists('logAction')) {
+        logAction('view', 'results', "Academic staff viewing approval details for class: $class_name", 'success', $class_id, 'results');
+    }
     
     // Get all subjects taught in this class with their teachers
     $subjects_query = mysqli_query($conn,

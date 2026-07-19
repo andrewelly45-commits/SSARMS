@@ -2,16 +2,64 @@
 session_start();
 include '../db.php';
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+$audit_paths = [
+    '../audit_logger.php',
+    'audit_logger.php',
+    '../includes/audit_logger.php',
+    '../../audit_logger.php',
+    dirname(__DIR__) . '/audit_logger.php'
+];
+
+$audit_loaded = false;
+foreach ($audit_paths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $audit_loaded = true;
+        break;
+    }
+}
+
+if (!$audit_loaded && !function_exists('logAction')) {
+    function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+        global $conn;
+        if ($conn) {
+            $query = "INSERT INTO audit_logs (user_id, user_name, user_role, action_type, module, action_description, status, ip_address, user_agent) 
+                      VALUES (
+                          NULL, 
+                          'System Fallback', 
+                          'system', 
+                          '$action_type', 
+                          '$module', 
+                          '$description', 
+                          '$status',
+                          '" . ($_SERVER['REMOTE_ADDR'] ?? '') . "',
+                          '" . ($_SERVER['HTTP_USER_AGENT'] ?? '') . "'
+                      )";
+            mysqli_query($conn, $query);
+        }
+        return true;
+    }
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 /* ================= AUTH CHECK ================= */
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'teacher') {
+    logAction('access_denied', 'marks', "Unauthorized access attempt to marks entry by: " . ($_SESSION['full_name'] ?? 'Unknown'), 'failed');
     header("Location: ../auth/login.php");
     exit();
 }
 
 $user_id = $_SESSION['user_id'];
+
+// ============================================
+// LOG ACADEMIC STAFF VIEWING MARKS ENTRY PAGE
+// ============================================
+logAction('view', 'marks', "Academic staff viewed marks entry page: " . ($_SESSION['full_name'] ?? 'Unknown'), 'success', $user_id, 'users');
 
 /* ================= GET TEACHER ================= */
 $teacher_query = mysqli_query($conn,
@@ -23,6 +71,7 @@ $teacher_query = mysqli_query($conn,
 $teacher = mysqli_fetch_assoc($teacher_query);
 
 if (!$teacher) {
+    logAction('error', 'marks', "Teacher not found for user_id: $user_id", 'failed');
     die("Teacher not found");
 }
 
@@ -41,6 +90,16 @@ $classes = mysqli_query($conn,
 
 /* ================= SELECTED CLASS ================= */
 $class_id = isset($_GET['class_id']) ? (int)$_GET['class_id'] : '';
+
+// Log class selection if a class is selected
+if (!empty($class_id)) {
+    // Get class name for logging
+    $class_name_query = mysqli_query($conn, "SELECT class_name FROM class WHERE class_id = '$class_id'");
+    $class_name_row = mysqli_fetch_assoc($class_name_query);
+    $class_name = $class_name_row['class_name'] ?? 'Unknown Class';
+    
+    logAction('view', 'marks', "Academic staff selected class: $class_name (ID: $class_id) for marks entry", 'success', $class_id, 'classes');
+}
 
 /* ================= GET SUBJECTS ================= */
 $subjects = null;

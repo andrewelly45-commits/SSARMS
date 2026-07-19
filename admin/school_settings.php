@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../db.php';
+include '../auth/audit_logger.php';
 
 // CHECK ADMIN
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {

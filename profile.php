@@ -8,6 +8,59 @@ session_start();
 require_once('config.php');
 require_once('db.php');
 
+// ============================================
+// INCLUDE AUDIT LOGGER
+// ============================================
+if (!function_exists('logAction')) {
+    $audit_paths = [
+        'audit_logger.php',
+        '../audit_logger.php',
+        'auth/audit_logger.php',
+        '../auth/audit_logger.php',
+        'includes/audit_logger.php',
+        '../includes/audit_logger.php'
+    ];
+    
+    $audit_loaded = false;
+    foreach ($audit_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $audit_loaded = true;
+            break;
+        }
+    }
+    
+    if (!$audit_loaded) {
+        function logAction($action_type, $module, $description, $status = 'success', $affected_id = null, $affected_table = null, $old_values = null, $new_values = null) {
+            global $conn;
+            error_log("AUDIT FALLBACK: [$action_type] [$module] $description - Status: $status");
+            
+            if (isset($conn) && $conn) {
+                $user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'System';
+                $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'system';
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                $query = "INSERT INTO audit_logs (user_name, user_role, action_type, module, action_description, status, ip_address, user_agent, affected_id, affected_table) 
+                          VALUES (
+                              '" . mysqli_real_escape_string($conn, $user_name) . "',
+                              '" . mysqli_real_escape_string($conn, $user_role) . "',
+                              '" . mysqli_real_escape_string($conn, $action_type) . "',
+                              '" . mysqli_real_escape_string($conn, $module) . "',
+                              '" . mysqli_real_escape_string($conn, $description) . "',
+                              '" . mysqli_real_escape_string($conn, $status) . "',
+                              '" . mysqli_real_escape_string($conn, $ip) . "',
+                              '" . mysqli_real_escape_string($conn, $agent) . "',
+                              " . ($affected_id ? (int)$affected_id : 'NULL') . ",
+                              '" . mysqli_real_escape_string($conn, $affected_table) . "'
+                          )";
+                mysqli_query($conn, $query);
+            }
+            return true;
+        }
+    }
+}
+
 // ============================================================
 // ENSURE UPLOAD DIRECTORY EXISTS - FIXED
 // ============================================================
@@ -23,8 +76,18 @@ if (!is_dir("../uploads")) {
 // AUTH CHECK
 // ============================================================
 if (!isset($_SESSION['user_id'])) {
+    if (function_exists('logAction')) {
+        logAction('access_denied', 'profile', "Unauthorized access attempt to profile page", 'failed');
+    }
     header("Location: auth/login.php");
     exit();
+}
+
+// ============================================
+// LOG PROFILE PAGE VIEW
+// ============================================
+if (function_exists('logAction')) {
+    logAction('view', 'profile', "User viewed profile: " . ($_SESSION['full_name'] ?? 'Unknown'), 'success', $_SESSION['user_id'], 'users');
 }
 
 $user_id = $_SESSION['user_id'];
@@ -37,6 +100,9 @@ $query = mysqli_query($conn, "SELECT * FROM users WHERE user_id='$user_id'");
 $user = mysqli_fetch_assoc($query);
 
 if (!$user) {
+    if (function_exists('logAction')) {
+        logAction('error', 'profile', "User not found for user_id: $user_id", 'failed');
+    }
     die("User not found.");
 }
 
@@ -187,7 +253,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_profile'])) {
     $phone = mysqli_real_escape_string($conn, trim($_POST['phone']));
     $gender = mysqli_real_escape_string($conn, $_POST['gender'] ?? '');
     
+    // Get old data for audit
+    $old_data = [
+        'full_name' => $user['full_name'],
+        'email' => $user['email'],
+        'phone' => $user['phone'] ?? '',
+        'gender' => $user['gender'] ?? ''
+    ];
+    
     $profile_pic = $user['profile_pic'];
+    $pic_updated = false;
     
     // Handle profile picture upload
     if (isset($_FILES['profile_pic']) && $_FILES['profile_pic']['error'] == 0) {
@@ -217,6 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_profile'])) {
                     }
                 }
                 $profile_pic = $new_name;
+                $pic_updated = true;
             } else {
                 $error = "Unable to upload image.";
             }
@@ -242,11 +318,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_profile'])) {
             $_SESSION['email'] = $email;
             $success = "Profile updated successfully!";
             
+            // Log profile update
+            if (function_exists('logAction')) {
+                $new_data = [
+                    'full_name' => $full_name,
+                    'email' => $email,
+                    'phone' => $phone,
+                    'gender' => $gender,
+                    'profile_pic_updated' => $pic_updated
+                ];
+                logAction(
+                    'edit', 
+                    'profile', 
+                    "User updated profile: " . $full_name, 
+                    'success', 
+                    $user_id, 
+                    'users',
+                    $old_data,
+                    $new_data
+                );
+            }
+            
             // Refresh user data
             $query = mysqli_query($conn, "SELECT * FROM users WHERE user_id='$user_id'");
             $user = mysqli_fetch_assoc($query);
         } else {
             $error = mysqli_error($conn);
+            
+            if (function_exists('logAction')) {
+                logAction('error', 'profile', "Failed to update profile: " . mysqli_error($conn), 'failed', $user_id, 'users');
+            }
         }
     }
 }
@@ -265,10 +366,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['change_password'])) {
     // Validate
     if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
         $pass_error = "All password fields are required.";
+        
+        if (function_exists('logAction')) {
+            logAction('error', 'profile', "Password change failed: Missing fields for user: " . ($user['full_name'] ?? 'Unknown'), 'failed', $user_id, 'users');
+        }
     } elseif ($new_password !== $confirm_password) {
         $pass_error = "New passwords do not match.";
+        
+        if (function_exists('logAction')) {
+            logAction('error', 'profile', "Password change failed: Passwords do not match for user: " . ($user['full_name'] ?? 'Unknown'), 'failed', $user_id, 'users');
+        }
     } elseif (strlen($new_password) < 6) {
         $pass_error = "Password must be at least 6 characters.";
+        
+        if (function_exists('logAction')) {
+            logAction('error', 'profile', "Password change failed: Password too short for user: " . ($user['full_name'] ?? 'Unknown'), 'failed', $user_id, 'users');
+        }
     } else {
         // Verify current password
         $check = mysqli_query($conn, "SELECT password FROM users WHERE user_id='$user_id'");
@@ -280,11 +393,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['change_password'])) {
             
             if ($update) {
                 $pass_success = "Password changed successfully!";
+                
+                // Log password change
+                if (function_exists('logAction')) {
+                    logAction('reset_password', 'profile', "User changed password: " . ($user['full_name'] ?? 'Unknown'), 'success', $user_id, 'users');
+                }
             } else {
                 $pass_error = "Failed to update password.";
+                
+                if (function_exists('logAction')) {
+                    logAction('error', 'profile', "Password change failed: Database error for user: " . ($user['full_name'] ?? 'Unknown'), 'failed', $user_id, 'users');
+                }
             }
         } else {
             $pass_error = "Current password is incorrect.";
+            
+            if (function_exists('logAction')) {
+                logAction('error', 'profile', "Password change failed: Incorrect current password for user: " . ($user['full_name'] ?? 'Unknown'), 'failed', $user_id, 'users');
+            }
         }
     }
 }

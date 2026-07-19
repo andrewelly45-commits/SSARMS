@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../db.php';
+include '../auth/audit_logger.php';
 
 // Fetch class-subject assignments
 $sql = "
